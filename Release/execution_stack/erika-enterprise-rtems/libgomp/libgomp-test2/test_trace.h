@@ -1,0 +1,17 @@
+/*
+ * test_trace.h
+ *
+ *  Created on: Feb 5, 2015
+ *      Author: e.guidieri
+ */
+
+#ifndef TEST_TRACE_H_
+#define TEST_TRACE_H_
+
+MPPA_DECLARE_TRACEPOINT(erika,THROW_ISR_ENTER,())
+MPPA_DECLARE_TRACEPOINT(erika,THROW_ISR_EXIT,())
+
+MPPA_TRACEPOINT_LOGLEVEL(erika,THROW_ISR_ENTER,MPPA_TRACE_DEBUG)
+MPPA_TRACEPOINT_LOGLEVEL(erika,THROW_ISR_EXIT,MPPA_TRACE_DEBUG)
+
+#endif /* TEST_TRACE_H_ */

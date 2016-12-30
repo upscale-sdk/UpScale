@@ -1,0 +1,22 @@
+<RCC>
+  <qresource prefix="/">
+  	<file>app_icon.icns</file>
+    <file>add.png</file>
+    <file>checked.png</file>
+    <file>draganddrop.ico</file>
+    <file>header.png</file>
+    <file>header_psoc.png</file>
+    <file>logo2.ico</file>
+    <file>new.ico</file>
+    <file>open.png</file>
+    <file>pencil2.png</file>
+    <file>purple.png</file>
+    <file>orange.png</file>
+    <file>run.ico</file>
+    <file>save.png</file>
+    <file>saveas.ico</file>
+    <file>see.png</file>
+    <file>tooltip.png</file>
+    <file>trash.ico</file>
+  </qresource>
+</RCC>

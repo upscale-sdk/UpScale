@@ -1,0 +1,94 @@
+From fea8402900f39119a80de6b4493fc81a1bd5ddba Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Thu, 16 Jun 2016 17:11:11 +0200
+Subject: [PATCH 309/311] Changed ret_from_fork
+
+---
+ arch/k1/mach-k1b/context.S | 54 ++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 52 insertions(+), 2 deletions(-)
+
+diff --git a/arch/k1/mach-k1b/context.S b/arch/k1/mach-k1b/context.S
+index 4585a8b..317eebd 100644
+--- a/arch/k1/mach-k1b/context.S
++++ b/arch/k1/mach-k1b/context.S
+@@ -103,8 +103,18 @@ ret_from_fork:
+ # would be unable to go back to user land.
+ 	disable_interrupts $r8
+ 	;;
++	cb.eqz 	$r1, 1f
++	;;
++	add     $r12, $r12, -SIZEOF_PT_REGS
++	;;
++1:
+ 	# Scratch area, $r17, $r18, $r19, -4 to keep 8bytes alignment
+-	add	$r12 = $r12, -32
++	add	$r12 = $r12, -48
++	;;
++	sw	32 [$r12] = $r1
++	;;
++	sw	28 [$r12] = $r16
++	get 	$r16 = $sr0
+ 	;;
+ 	sw	20 [$r12] = $r18
+ 	;;
+@@ -125,7 +135,42 @@ ret_from_fork:
+ # We restore the "small" context that was saved : ra, sps, spc
+ 	disable_interrupts $r8
+ 	;;
++	lw	$r1 = 32 [$r12]
++	;;
++	cb.eqz 	$r1, fork_exit
++fork_check_work_pending:
++	lw      $r8 = OFFSET_ti_flags[$r16]
++	;;
++	and 	$r8 = $r8, 0x28 ##(_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY)
++	make 	$r7 = schedule
++	;;
++	cb.eqz  $r8, fork_check_signal
++	;;
++	icall 	$r7
++	;;
++	goto 	fork_check_work_pending
++	;;
++fork_check_signal:
++	copy 	$r16 = $r1
++	;;
++	make    $r1 = 0
++	;;
++	enable_interrupts $r8
++	;;
++	make    $r7 = do_notify_resume
++	;;
++	add     $r0 = $r12, 48
++	icall 	$r7
++	;;
++	disable_interrupts $r8
++	;;
++	copy 	$r1 = $r16
++fork_check_signal_x:
++	lw	$r1 = 32 [$r12]
++	;;
++fork_exit:
+ 	set 	$sps = $r18
++	lw	$r16 = 28 [$r12]
+ 	;;
+ 	set 	$spc = $r19
+ 	lw	$r18 = 20 [$r12]
+@@ -134,8 +179,13 @@ ret_from_fork:
+ 	lw 	$r19 = 24 [$r12]
+ 	;;
+ 	lw 	$r17 = 16 [$r12]
+-	add 	$r12 = $r12, 32
++	add 	$r12 = $r12, 48
++	;;
++	cb.eqz 	$r1, 2f
++	;;
++	add     $r12, $r12, SIZEOF_PT_REGS
+ 	;;
++2:
+ /**
+  * sr3 is the register from which we will restore the saved value of sp
+  * If you modify it, be sure to update the code in start_kernel (process.c)
+-- 
+1.8.3.1
+

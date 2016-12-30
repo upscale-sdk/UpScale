@@ -1,0 +1,41 @@
+/** Primo grande cambiamento nella configurazione */
+#include "ee_internal.h"
+
+EE_TCB_WJ ee_core0_tcb_array[EE_CORE0_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core1_tcb_array[EE_CORE1_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core2_tcb_array[EE_CORE2_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core3_tcb_array[EE_CORE3_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core4_tcb_array[EE_CORE4_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core5_tcb_array[EE_CORE5_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core6_tcb_array[EE_CORE6_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core7_tcb_array[EE_CORE7_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core8_tcb_array[EE_CORE8_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core9_tcb_array[EE_CORE9_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core10_tcb_array[EE_CORE10_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core11_tcb_array[EE_CORE11_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core12_tcb_array[EE_CORE12_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core13_tcb_array[EE_CORE13_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core14_tcb_array[EE_CORE14_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_core15_tcb_array[EE_CORE15_TCB_ARRAY_SIZE];
+EE_TCB_WJ ee_rm_tcb_array[EE_CORE_RM_TCB_ARRAY_SIZE];
+
+EE_schedule_data ee_core0_sd_array[EE_CORE0_SD_ARRAY_SIZE];
+EE_schedule_data ee_core1_sd_array[EE_CORE1_SD_ARRAY_SIZE];
+EE_schedule_data ee_core2_sd_array[EE_CORE2_SD_ARRAY_SIZE];
+EE_schedule_data ee_core3_sd_array[EE_CORE3_SD_ARRAY_SIZE];
+EE_schedule_data ee_core4_sd_array[EE_CORE4_SD_ARRAY_SIZE];
+EE_schedule_data ee_core5_sd_array[EE_CORE5_SD_ARRAY_SIZE];
+EE_schedule_data ee_core6_sd_array[EE_CORE6_SD_ARRAY_SIZE];
+EE_schedule_data ee_core7_sd_array[EE_CORE7_SD_ARRAY_SIZE];
+EE_schedule_data ee_core8_sd_array[EE_CORE8_SD_ARRAY_SIZE];
+EE_schedule_data ee_core9_sd_array[EE_CORE9_SD_ARRAY_SIZE];
+EE_schedule_data ee_core10_sd_array[EE_CORE10_SD_ARRAY_SIZE];
+EE_schedule_data ee_core11_sd_array[EE_CORE11_SD_ARRAY_SIZE];
+EE_schedule_data ee_core12_sd_array[EE_CORE12_SD_ARRAY_SIZE];
+EE_schedule_data ee_core13_sd_array[EE_CORE13_SD_ARRAY_SIZE];
+EE_schedule_data ee_core14_sd_array[EE_CORE14_SD_ARRAY_SIZE];
+EE_schedule_data ee_core15_sd_array[EE_CORE15_SD_ARRAY_SIZE];
+EE_schedule_data ee_rm_sd_array[EE_CORE_RM_SD_ARRAY_SIZE];
+
+EE_KCB_WJ KCB_WJ;
+EE_KDB_WJ KDB_WJ;

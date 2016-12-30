@@ -1,0 +1,116 @@
+#K1_LD_VERBOSE    := -Wl,-verbose > ld.txt
+
+# K1_TOOLCHAIN_DIR := $(shell echo $${K1_TOOLCHAIN_DIR:-/usr/local/k1tools/})
+
+#======== THE FOLLOWING HAVE TO BE OVERIDDEN TO CHANGE BUILD's DEFAULT ========#
+
+K1_LIB_PREFIX ?= lib
+K1_LIB_SUFFIX ?= .a
+
+K1_ERIKA_FILES    ?= .
+K1_ERIKA_PKG2     ?= ${K1_ERIKA_FILES}/rtos/ee/pkg2
+
+K1_OUTPTDIR ?= $(if ${O},${O},output)
+
+#========= THE ABOVE HAVE TO BE OVERIDDEN TO CHANGE BUILD's DEFAULT ==========#
+
+# Needed for Ubuntu/Debian since sh points to dash instead of bash...
+SHELL := /bin/bash
+
+K1_ERIKA_SRCS := $(addprefix ${K1_ERIKA_PKG2}, \
+  /cpu/kalray_k1/hal/ee_k1_asm.S \
+  /common/utils/ee_assert.c \
+  /cpu/kalray_k1/bsp/ee_k1_irq.c \
+  /cpu/kalray_k1/bsp/ee_k1_cluster_init.c \
+  /cpu/kalray_k1/bsp/ee_k1_rm_task_server.c \
+  /cpu/kalray_k1/bsp/ee_k1_startup_handlers.c \
+  /cpu/kalray_k1/bsp/ee_k1_bsp_communication.c \
+  /cpu/kalray_k1/bsp/eecfg.c \
+  /cpu/kalray_k1/bsp/ee_hal_init.c \
+  /hal/kernel/ee_hal_std_change_context.c \
+  /kernel/oo/ee_scheduler.c \
+  /kernel/oo/ee_api_dynamic.c \
+  /kernel/oo/ee_api_extension.c \
+  /kernel/oo/ee_api_osek.c \
+  /kernel/oo/ee_scheduler_entry_points.c \
+  /kernel/k1/ee_api_k1.c \
+  /kernel/k1/ee_kernel_k1.c)
+
+K1_SRCS := $(K1_ERIKA_SRCS) ${K1_ERIKA_FILES}/libgomp/root.c
+
+# Define the C and ASM object files 
+K1_ERIKA_OBJS := $(K1_ERIKA_SRCS:.c=.o)
+K1_ERIKA_OBJS := $(K1_ERIKA_OBJS:.S=.o)
+K1_ERIKA_OBJS := $(addprefix $(K1_OUTPTDIR)/, $(notdir $(K1_ERIKA_OBJS)))
+
+K1_OBJS := $(K1_ERIKA_OBJS) $(K1_OUTPTDIR)/root.o
+
+#Dependencies
+K1_DEPS := $(K1_OBJS:.o=.d)
+
+#$(info K1_ERIKA_OBJS:= $(K1_ERIKA_OBJS))
+#$(info K1_ERIKA_APP_OBJS:= $(K1_ERIKA_APP_OBJS))
+#$(info K1_DEPS:= $(K1_DEPS))
+
+K1_ERIKA_LIBS_NAME ?= ee
+
+K1_ERIKA_LIB := $(K1_LIB_PREFIX)$(K1_ERIKA_LIBS_NAME)$(K1_LIB_SUFFIX)
+
+# FIXME find a better solution to include
+#  - /rtos/ee/pkg2/examples/k1/test/eecfg.h
+#  - /kernel/k1/ee_api_k1.h
+
+K1_ERIKA_INCLUDE_DIRS := $(addprefix ${K1_ERIKA_PKG2}, /common/compilers /common/compilers/gcc \
+    /common/utils /cpu/kalray_k1/bsp /cpu/kalray_k1/hal /hal/kernel /kernel/k1/bsp /kernel/oo \
+    /examples/k1/test/ /kernel/k1) \
+    ${K1_ERIKA_FILES}/libgomp ${K1_ERIKA_FILES}/libgomp/config/k1
+
+K1_CLUSTER_INCLUDE_DIRS_OPT := $(addprefix -I, $(K1_ERIKA_INCLUDE_DIRS) $(K1_ERIKA_APP_INCLUDE_DIRS))
+
+K1_CFLAGS := -mcore=k1dp -mboard=developer -mos=bare -std=c99\
+  -Wall -Wno-unused-function -save-temps=obj -g -O -I. $(K1_CLUSTER_INCLUDE_DIRS_OPT)\
+  -DBAR_SIGWAIT -DTASKING_ENABLED -DTASK_BARRIER_BUSY_WAITING
+
+K1_ARFLAGS := rcs
+
+# Add all the sources path to %.c and %.S vpath
+vpath %.c $(dir $(K1_SRCS)) libpsocoffload
+vpath %.S $(dir $(K1_SRCS))
+
+.PHONY: all clean
+
+all: $(K1_OUTPTDIR) $(K1_OUTPTDIR)/$(K1_ERIKA_LIB) $(K1_OUTPTDIR)/libpsocomp.a $(K1_OUTPTDIR)/libpsocoffload.a
+
+ifneq ($(MAKECMDGOALS),clean)
+-include $(K1_DEPS)
+endif
+
+$(K1_OUTPTDIR):
+	mkdir -p $@
+
+# Objects depend on directories, but they are not remade if directories change
+$(K1_OBJS): | $(K1_OUTPTDIR)
+
+$(K1_OUTPTDIR)/$(K1_ERIKA_LIB): $(K1_ERIKA_OBJS)
+	$(K1_TOOLCHAIN_DIR)/bin/k1-ar $(K1_ARFLAGS) $@ $^
+
+$(K1_OUTPTDIR)/libpsocomp.a: $(K1_OUTPTDIR)/root.o
+	$(K1_TOOLCHAIN_DIR)/bin/k1-ar $(K1_ARFLAGS) $@ $^
+	
+$(K1_OUTPTDIR)/libpsocoffload.a: $(K1_OUTPTDIR)/offload_support.o
+	$(K1_TOOLCHAIN_DIR)/bin/k1-ar $(K1_ARFLAGS) $@ $^
+
+$(K1_OUTPTDIR)/offload_support.o: offload_support.c
+	$(K1_TOOLCHAIN_DIR)/bin/k1-gcc -mcore=k1io -mboard=developer -mos=rtems -mboard=developer -std=c99 -Wall -Wno-unused-function\
+  -save-temps=obj -g -O -I. $(K1_CLUSTER_INCLUDE_DIRS_OPT)\
+  -DBAR_SIGWAIT -DTASKING_ENABLED -DTASK_BARRIER_BUSY_WAITING -c $< -o $@
+
+$(K1_OUTPTDIR)/%.o: %.c
+	$(K1_TOOLCHAIN_DIR)/bin/k1-gcc $(K1_CFLAGS) -c $< -o $@
+
+$(K1_OUTPTDIR)/%.o: %.S
+	$(K1_TOOLCHAIN_DIR)/bin/k1-gcc $(K1_CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(K1_OUTPTDIR) $(K1_ERIKA_APP)
+

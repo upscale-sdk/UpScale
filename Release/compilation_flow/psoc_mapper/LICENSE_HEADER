@@ -1,0 +1,30 @@
+/* -----------------------------------------------------------------------------
+ * Author list (in alphabetic order):
+ * 
+ *        Alessandra Melani <al.melani@sssup.it>
+ *        Eduardo Quiñones <eduardo.quinones@bsc.es>
+ *        Marko Bertogna <marko.bertogna@unimore.it>
+ *        Paolo Burgio <paolo.burgio@unimore.it>
+ *        Roberto Vargas <roberto.vargas@bsc.es>
+ * 
+ * -----------------------------------------------------------------------------
+ * (C) Copyright 2016 Barcelona Supercomputing Center, 
+ *                    Università degli Studi di Modena e Reggio Emilia,
+ *                    Scuola superiore Sant'Anna
+ * 
+ * This file is part of psoc_mapper (Compilation flow) of the P-SOCRATES project.
+ *
+ * Psoc_mapper is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published 
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * Psoc_mapper is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with psoc_mapper. If not, see <http://www.gnu.org/licenses/>.
+ * -----------------------------------------------------------------------------
+ */

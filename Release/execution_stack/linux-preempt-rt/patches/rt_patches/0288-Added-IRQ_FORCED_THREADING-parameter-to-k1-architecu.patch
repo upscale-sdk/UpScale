@@ -1,0 +1,25 @@
+From b6b1000c0efce482b065ec9f60133e5096e0f6e1 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Sun, 5 Jun 2016 14:03:21 +0200
+Subject: [PATCH 288/311] Added IRQ_FORCED_THREADING parameter to k1
+ architecutre
+
+---
+ arch/k1/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/k1/Kconfig b/arch/k1/Kconfig
+index f61ec06..5209cb2 100644
+--- a/arch/k1/Kconfig
++++ b/arch/k1/Kconfig
+@@ -34,6 +34,7 @@ config KALRAY
+ 	select HAVE_KERNEL_LZMA if RAMKERNEL
+ 	select HAVE_KERNEL_LZO if RAMKERNEL
+ 	select HAVE_GENERIC_HARDIRQS
++	select IRQ_FORCED_THREADING
+ 	select GENERIC_IRQ_CHIP
+ 	select SERIAL_CORE
+ 	select SERIAL_CORE_CONSOLE
+-- 
+1.8.3.1
+

@@ -1,0 +1,27 @@
+From 4fda6c0a4d195adf7e60dfd962863ecf896ce2db Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Tue, 14 Jun 2016 14:19:36 +0200
+Subject: [PATCH 305/311] Fix for IO0@0.0: 00: WARNING: at
+ kernel/irq/manage.c:512 enable_irq+0x70/0x88() IO0@0.0: 00: Unbalanced enable
+ for IRQ 0 IO0@0.0: 00: ---[ end trace 0000000000000355 ]--- IO0@0.0: 00: ---[
+ end trace 000000000000035c ]---
+
+---
+ arch/k1/kernel/time.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/k1/kernel/time.c b/arch/k1/kernel/time.c
+index 70927bd..f38e0c7 100644
+--- a/arch/k1/kernel/time.c
++++ b/arch/k1/kernel/time.c
+@@ -45,6 +45,7 @@ static int k1_clkevent_set_next_event(unsigned long cycles,
+ {
+ 	/* program the timer with a null reload value in
+ 	   order to be in oneshot mode */
++	disable_irq(TIMER0);
+ 	__k1_timer_setup_num(TIMER0, cycles, 0, 0);
+ 	enable_irq(TIMER0);
+ 
+-- 
+1.8.3.1
+

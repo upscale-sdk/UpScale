@@ -1,0 +1,129 @@
+# This file describes the fields of entity_specs_t
+# 
+# A comment starts with a # as a first nonblank character
+#
+# Syntax of each line
+#
+# TYPE|LANG|NAME|DESCRIPTION
+# 
+# TYPE -> bool 
+#      -> integer
+#      -> AST
+#      -> scope /* Avoid at all costs to use these, they take a lot of memory */
+#      -> symbol
+#      -> type
+#      -> typeof("literal-c-typename")
+#      -> array(TYPE)
+#      -> string
+#
+# LANG -> all
+#      -> fortran
+# 
+# NAME -> name of the attribute (as a valid C identifier)
+# DESCRIPTION -> Descriptive text of the attribute
+#
+#
+bool|all|is_static|States if this is a static storage (or SAVEd in Fortran) variable
+bool|all|is_register|States if this is a register variable
+bool|all|is_extern|The symbol has an explicit extern storage
+bool|all|is_thread|The symbol has thread local storage
+bool|all|is_thread_local|The symbol has thread local storage C++11
+bool|all|is_mutable|The symbol is a mutable entity of a const-class
+bool|all|is_export|This is an exported template. Not used at all
+bool|all|is_inline|The function has been explicitly set as inline
+bool|all|is_virtual|The function is virtual
+bool|all|is_pure|The function has been defined as pure virtual
+bool|all|is_builtin|States that this is a builtin symbol of the compiler
+bool|all|is_deleted|This function has been deleted (C++1x)
+bool|all|is_defaulted|This function has been defined as default (C++1x)
+bool|all|is_conversion|This is a conversion function
+bool|all|is_trivial|States that this symbol has been trivially defined by the language
+bool|all|is_constructor|This is a constructor
+bool|all|is_default_constructor|This is the default constructor
+bool|all|is_copy_constructor|This is a copy-constructor
+bool|all|is_move_constructor|This is a move-constructor (C++1x)
+bool|all|is_conversor_constructor|This is a conversor constructor
+bool|all|is_copy_assignment_operator|This is a copy assignment operator
+bool|all|is_move_assignment_operator|This is a move assignment opeator (C++1x)
+bool|all|is_destructor|This is a destructor
+bool|all|is_explicit|This constructor has been marked as explicit
+bool|all|is_surrogate_function|This function is a surrogate fake symbol created during overload resolution
+bool|all|is_anonymous_union|This is an anonymous union (or class)
+bool|all|is_member_of_anonymous|This entity is a member of an anonymous entity
+bool|all|is_user_declared|This symbol has been written by the user in the source code
+bool|all|is_instantiable|This specialization of template can be instantiated
+bool|all|is_instantiated|This specialization has already been instantiated
+bool|all|is_template_parameter|This is a template parameter
+bool|all|is_member|This symbol is a member of a class
+bool|all|is_bitfield|This symbol is a bitfield
+bool|all|is_unnamed_bitfield|This symbol is an unnamed bitfield
+bool|all|is_friend_declared|States that this symbol has been declared as a friend but not formally declared or defined
+bool|all|any_exception|States that this function can throw any exception
+bool|all|is_injected_class_name|This symbol is the injected class name
+bool|all|is_unnamed|This is an unnamed struct or enum
+bool|all|is_defined_inside_class_specifier|This symbol has been defined inside the class specifier
+bool|all|is_nested_function|States that this function is nested inside another one
+bool|all|is_saved_expression|States that this variable is actually a phony one created to store a runtime value used elsewhere
+bool|all|gcc_extension|States that this variable has the gcc __extension__ attribute
+bool|all|is_result_var|This symbol is the result variable of the function
+bool|all|is_constexpr|States that this symbol is a C++ constexpr
+bool|all|is_override|States that this symbol is explicitly overriden
+bool|all|is_final|States that this symbol is final
+bool|all|is_hides_member|States that this symbol explicitly hides a member in the base class
+bool|fortran|is_global_hidden|States that this global symbol does not have to be visible in normal lookups
+bool|fortran|is_implicit_basic_type|This entity has got an implicit basic type
+bool|fortran|is_allocatable|This entity has the ALLOCATABLE attribute
+bool|fortran|is_in_common|This entity appears in a COMMON construct
+bool|fortran|is_in_namelist|This entity appears in a NAMELIST
+bool|fortran|is_optional|This dummy argument has the OPTIONAL attribute
+bool|fortran|is_target|This entity has the TARGET attribute
+bool|fortran|is_elemental|This is an ELEMENTAL function
+bool|fortran|is_recursive|This is a RECURSIVE function
+bool|fortran|is_stmt_function|This symbol has been declared after a statement function statement
+bool|fortran|is_intrinsic_subroutine|This symbol is an INTRINSIC SUBROUTINE
+bool|fortran|is_intrinsic_function|This symbol is an INTRINSIC FUNCTION
+bool|fortran|is_module_procedure|This function has been named in an interface construct as a MODULE PROCEDURE
+bool|fortran|is_entry|This symbol is an ENTRY
+bool|fortran|is_renamed|States that this symbol has been USEd with a rename
+bool|fortran|is_cray_pointee|This symbol is a Cray pointee
+bool|fortran|is_cray_pointer|This symbol is a Cray pointer
+bool|fortran|is_saved_program_unit|States that all non-automatic entities are SAVEd in that program unit
+bool|fortran|is_contiguous|CONTIGUOUS attribute for pointers
+symbol|all|result_var|If this symbol is a function, its result variable, NULL otherwise
+symbol|all|alias_to|If this symbol is_renamed (Fortran) or is a SK_USING (in C/C++)
+symbol|all|emission_template|The generic symbol of an intrinsic (Fortran). The template that must be used to emit this specialization (C++)
+nodecl|all|anonymous_accessor|Is this symbol is_member_of_anonymous it must be accessed using this nodecl
+typeof(intent_kind_t,enum)|fortran|intent_kind|The INTENT attribute of this dummy argument
+symbol|fortran|in_common|The COMMON where this entity belongs. See is_in_common
+symbol|fortran|namelist|The NAMELIST where this entity belongs. See is_in_namelist
+array(symbol)|all|related_symbols|Related symbols for this entity. Meaningful for NAMELIST, COMMON, FUNCTION, SUBROUTINE and MODULE and C/C++ functions
+array(symbol)|all|friend_candidates|Candidates friend symbols for this entity. Meaningful for C++ dependent friend functions
+symbol|fortran|specific_intrinsic|For some INTRINSICs they have a specific function to be used when referenced not in a call. See is_builtin
+typeof(access_specifier_t,enum)|all|access|Accessibility: public, private, protected
+integer|all|template_parameter_nesting|Nesting in the template parameter scoping hierarchy. See is_template_parameter
+integer|all|template_parameter_position|Position in the template parameter scoping hierarchy. See is_template_parameter
+type|all|class_type|The class type where a member belongs. See is_member
+symbol|fortran|from_module|If not NULL, it means the symbol comes because the module was USEd
+string|fortran|from_module_name|If from_module is not NULL is the name of the USEd entity
+symbol|fortran|in_module|If not NULL it means that this symbol is a component of the module
+symbol|fortran|cray_pointer|If this symbol is_cray_pointee then this is its Cray pointer
+symbol|fortran|used_modules|Symbol that keeps track of the USEd modules in this program unit
+string|all|linkage_spec|The linkage specifier (C, C++)
+nodecl|all|noexception|C++ noexcept specifier. If this tree is not null it will be at least 'true'
+array(type)|all|exceptions|Exception specifier for functions. Can be empty. See any_exception
+array(typeof(function_parameter_info_t))|all|function_parameter_info|Information kept for a symbol that is a parameter of a function
+array(typeof(default_argument_info_t*))|all|num_parameters,default_argument_info|Default arguments for functions
+nodecl|all|bitfield_size|Expression of the bitfield
+typeof(_size_t,intptr)|all|bitfield_offset|Offset in bytes since the beginning of the struct (does not have to be tha same as storage unit)
+integer|all|bitfield_first|Significance order of the first bit of this bitfield
+integer|all|bitfield_last|Significance order of the last bit of this bitfield (the same as first if the bitfield is just 1 bit wide)
+typeof(_size_t,intptr)|all|field_offset|Offset of the storage unit of a field/nonstatic data-member
+array(typeof(gcc_attribute_t))|all|gcc_attributes|GCC attributes synthesized for the symbol from the syntax
+array(typeof(gcc_attribute_t))|all|ms_attributes|MS __declspec attributes
+typeof(simplify_function_t,pointer)|all|simplify_function|Function used to simplify expressions
+nodecl|fortran|bind_info|Information of a BIND(lang, X)
+nodecl|all|asm_specification|__asm specification of GCC
+nodecl|all|*function_code|Nodecl statement of a function
+typeof(pfortran_modules_data_set_t)|fortran|*module_extra_info|Extra info used by fortran modules shared between the FE and TL
+typeof(instantiation_symbol_map_t*)|all|*instantiation_symbol_map|Instantiation map for template classes and functions
+nodecl|all|*alignas_value|C++11 alignas attribute

@@ -1,0 +1,81 @@
+From 1a8ee7e5f42eea0c02611f4aeafdeeede80a8b09 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Wed, 15 Jun 2016 13:59:53 +0200
+Subject: [PATCH 307/311] Removed raw_spin_locks from thread-safe functions of
+ k1 gic.c
+
+---
+ arch/k1/kernel/gic.c | 10 ----------
+ 1 file changed, 10 deletions(-)
+
+diff --git a/arch/k1/kernel/gic.c b/arch/k1/kernel/gic.c
+index be84955..8816f6f 100644
+--- a/arch/k1/kernel/gic.c
++++ b/arch/k1/kernel/gic.c
+@@ -115,7 +115,6 @@ static void gic_irq_enable(struct irq_data *d)
+ {
+ 	unsigned int irq = d->irq - GIC_IRQ_BASE;
+ 
+-	raw_spin_lock(&gic_lock);
+ 	/* clear a probably pending interupt */
+ 	mppa_gic_confirm_irq(irq, smp_processor_id(),
+ 				 gic_input_to_output[irq]);
+@@ -129,7 +128,6 @@ static void gic_irq_enable(struct irq_data *d)
+ 	 * calling enable */
+ 	mppa_gic_enable_input_irq(irq);
+ 	mppa_gic_enable_output_irq(gic_input_to_output[irq]);
+-	raw_spin_unlock(&gic_lock);
+ }
+ 
+ static void gic_irq_disable(struct irq_data *d)
+@@ -137,7 +135,6 @@ static void gic_irq_disable(struct irq_data *d)
+ 	unsigned int irq = d->irq - GIC_IRQ_BASE;
+ 	u64 inputs, enabled_inputs;
+ 
+-	raw_spin_lock(&gic_lock);
+ 	/* disable input */
+ 	mppa_gic_disable_input_irq(irq);
+ 
+@@ -151,17 +148,14 @@ static void gic_irq_disable(struct irq_data *d)
+ 	if (inputs == (1 << irq)) {
+ 		mppa_gic_disable_output_irq(gic_input_to_output[irq]);
+ 	}
+-	raw_spin_unlock(&gic_lock);
+ }
+ 
+ static void gic_irq_ack(struct irq_data *d)
+ {
+ 	unsigned int irq = d->irq - GIC_IRQ_BASE;
+ 
+-	raw_spin_lock(&gic_lock);
+ 	mppa_gic_clear_output_irq(gic_input_to_output[irq]);
+ 	mppa_gic_clear_input_irq(irq);
+-	raw_spin_unlock(&gic_lock);
+ }
+ 
+ static void gic_mask_irq(struct irq_data *d)
+@@ -177,21 +171,17 @@ static void gic_mask_ack_irq(struct irq_data *d)
+ {
+ 	unsigned int irq = d->irq - GIC_IRQ_BASE;
+ 
+-	raw_spin_lock(&gic_lock);
+ 	mppa_gic_disable_input_irq(irq);
+ 	mppa_gic_clear_input_irq(irq);
+ 	mppa_gic_clear_output_irq(gic_input_to_output[irq]);
+-	raw_spin_unlock(&gic_lock);
+ }
+ 
+ static void gic_unmask_irq(struct irq_data *d)
+ {
+ 	unsigned int irq = d->irq - GIC_IRQ_BASE;
+ 
+-	raw_spin_lock(&gic_lock);
+ 	mppa_gic_enable_input_irq(irq);
+ 	mppa_gic_enable_output_irq(gic_input_to_output[irq]);
+-	raw_spin_unlock(&gic_lock);
+ }
+ 
+ #ifdef CONFIG_SMP
+-- 
+1.8.3.1
+

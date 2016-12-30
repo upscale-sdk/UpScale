@@ -1,0 +1,70 @@
+From 7932e2c0099ccfc55e78030e4306ab6ea4c88efb Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Sun, 12 Jun 2016 08:23:18 +0200
+Subject: [PATCH 293/311] Rewrite return from syscall path
+
+---
+ arch/k1/mach-k1b/syscalls.S | 47 ++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 46 insertions(+), 1 deletion(-)
+
+diff --git a/arch/k1/mach-k1b/syscalls.S b/arch/k1/mach-k1b/syscalls.S
+index 745f9b5..db0b83a 100644
+--- a/arch/k1/mach-k1b/syscalls.S
++++ b/arch/k1/mach-k1b/syscalls.S
+@@ -58,7 +58,52 @@ ENTRY(_machine_scall_handler)
+ 	;;
+ 	add	$r12 = $r12, 16       ## destroy scratch area
+ 	;;
+-	ret_from_syscall
++#	ret_from_syscall
++	disable_interrupts $r7
++	;;
++	get     $r16 = $sr0
++	;;
++	copy	$r20 = $r0	## syscall return value
++	;;
++sys_check_work_pending:
++	lw      $r4 = OFFSET_ti_flags[$r16]
++	;;
++	and 	$r4 = $r4, 0x28 ##(_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY)
++	make 	$r7 = schedule
++	;;
++	cb.eqz 	$r4, sys_check_signal
++	;;
++	add 	$r12 = $r12, -16
++	icall 	$r7
++	;;
++	add 	$r12 = $r12, 16
++	;;
++	goto 	sys_check_work_pending
++	;;
++sys_check_signal:
++	make 	$r1 = 1
++	;;
++	enable_interrupts $r8
++	;;
++	copy	$r2 = $r20	## syscall return value
++	make 	$r7 = do_notify_resume
++	;;
++	copy	$r0 = $r12
++	;;
++	add 	$r12 = $r12, -16
++	icall 	$r7
++	;;
++	disable_interrupts $r8
++	;;
++	add 	$r12 = $r12, 16
++	;;
++	restore_context $r12
++	;;
++	add 	$r12 = $r12, SIZEOF_PT_REGS
++	;;
++	sys_restore_usp
++	;;
++	rfe
+ 	;;
+ # High system calls used by the simulator. If no simulator,
+ # return an error or exit if it is the last scall
+-- 
+1.8.3.1
+

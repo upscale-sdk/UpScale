@@ -1,0 +1,76 @@
+From 32263a3a5592b364a6b9bd5a719f9497f306eb4a Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Tue, 14 Jun 2016 13:59:44 +0200
+Subject: [PATCH 304/311] HIGH_RES_TIMERS on
+
+---
+ .../configs/k1bio_developer_smp_mmu_rt_defconfig   | 22 ++++++++++++----------
+ 1 file changed, 12 insertions(+), 10 deletions(-)
+
+diff --git a/arch/k1/configs/k1bio_developer_smp_mmu_rt_defconfig b/arch/k1/configs/k1bio_developer_smp_mmu_rt_defconfig
+index 7145b52..dcf5059 100644
+--- a/arch/k1/configs/k1bio_developer_smp_mmu_rt_defconfig
++++ b/arch/k1/configs/k1bio_developer_smp_mmu_rt_defconfig
+@@ -59,10 +59,11 @@ CONFIG_GENERIC_CLOCKEVENTS_BUILD=y
+ #
+ # Timers subsystem
+ #
++CONFIG_TICK_ONESHOT=y
+ CONFIG_HZ_PERIODIC=y
+ # CONFIG_NO_HZ_IDLE is not set
+ # CONFIG_NO_HZ is not set
+-# CONFIG_HIGH_RES_TIMERS is not set
++CONFIG_HIGH_RES_TIMERS=y
+ 
+ #
+ # CPU/Task time and stats accounting
+@@ -188,14 +189,6 @@ CONFIG_RAMKERNEL=y
+ CONFIG_K1_MEMORY_START=0x80000000
+ CONFIG_K1_OPTIMIZED_MEM_FUNCTIONS=y
+ CONFIG_CMDLINE="dhash_entries=1024 ihash_entries=1024 cma=128M"
+-CONFIG_PREEMPT=y
+-CONFIG_PREEMPT_RT_BASE=y
+-# CONFIG_PREEMPT_NONE is not set
+-# CONFIG_PREEMPT_VOLUNTARY is not set
+-# CONFIG_PREEMPT__LL is not set
+-# CONFIG_PREEMPT_RTB is not set
+-CONFIG_PREEMPT_RT_FULL=y
+-CONFIG_PREEMPT_COUNT=y
+ 
+ #
+ # Platform options
+@@ -219,7 +212,7 @@ CONFIG_HZ_100=y
+ # CONFIG_HZ_300 is not set
+ # CONFIG_HZ_1000 is not set
+ CONFIG_HZ=100
+-# CONFIG_SCHED_HRTICK is not set
++CONFIG_SCHED_HRTICK=y
+ 
+ #
+ # Timers subsystem
+@@ -249,6 +242,14 @@ CONFIG_BINFMT_SCRIPT=y
+ # CONFIG_HAVE_AOUT is not set
+ # CONFIG_BINFMT_MISC is not set
+ CONFIG_COREDUMP=y
++CONFIG_PREEMPT=y
++CONFIG_PREEMPT_RT_BASE=y
++# CONFIG_PREEMPT_NONE is not set
++# CONFIG_PREEMPT_VOLUNTARY is not set
++# CONFIG_PREEMPT__LL is not set
++# CONFIG_PREEMPT_RTB is not set
++CONFIG_PREEMPT_RT_FULL=y
++CONFIG_PREEMPT_COUNT=y
+ 
+ #
+ # Device Drivers
+@@ -1222,6 +1223,7 @@ CONFIG_FTRACE=y
+ # CONFIG_IRQSOFF_TRACER is not set
+ # CONFIG_PREEMPT_TRACER is not set
+ # CONFIG_SCHED_TRACER is not set
++# CONFIG_MISSED_TIMER_OFFSETS_HIST is not set
+ # CONFIG_ENABLE_DEFAULT_TRACERS is not set
+ # CONFIG_TRACER_SNAPSHOT is not set
+ CONFIG_BRANCH_PROFILE_NONE=y
+-- 
+1.8.3.1
+

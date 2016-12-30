@@ -1,0 +1,3599 @@
+\input texinfo
+@c %**start of header
+@setfilename mcxx-internals.info
+@settitle mcxx Internals Manual
+@c %**end of header
+
+@copying
+mcxx Internals Manual. Version 1.0
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+
+Copyright @copyright{} 2008 Roger Ferrer Ib@'a@~nez.
+@end copying
+
+@titlepage
+@title mcxx Internals Manual
+@c The following two commands start the copyright page
+@subtitle Mercurium C/C++ Internal Documentation Reference
+@subtitle Last modified: $Date$
+@author Roger Ferrer Ib@'a@~nez
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+@end titlepage
+
+@c Output the table of contents 
+@contents
+
+@ifnottex
+@node Top
+@top mcxx Internals Documentation Reference
+@insertcopying
+@end ifnottex
+
+@menu
+* Introduction::
+* Compilation process::
+* Abstract Syntax Tree::
+* Type system::
+* Symbols::
+* Scopes and contexts::
+* Extensible structures and schemas::
+* Library and tool support::
+* Installation of mcxx::
+* Function Index::
+* Type Index::
+* Concept Index::
+@end menu
+
+@node Introduction
+@chapter Introduction
+@cindex introduction
+
+@menu
+* What is this document about::
+* What is mcxx?::
+* Structure of this document::
+@end menu
+
+@node What is this document about
+@section What is this document about
+@cindex goal of the document
+
+This is the @acronym{mcxx, Mercurium C++ compiler} internals reference document. This document intends to give the
+reader a detailed explanation of the compiler, how it works and how it can be extended.
+The idea is not to give a course of compilers but allow any user with enough
+compilation process knowledge to modify the compiler.
+
+This is not a document to learn C or C++ and even in some places it requires good
+knowledge of these. 
+
+@node What is mcxx?
+@section What is mcxx?
+@cindex what is mcxx
+
+mcxx is a C/C++ research compiler targeted at source-to-source processing. The word
+research here means that it is not intended to be a commercial high-quality compiler
+(even if the developers and their responsibles would like it to be) and thus it may crash, eat your homework
+or wipe your hard disk. Normally, though, this is unlikely to happen and we strive for to make this close to
+impossible. But you were warned.
+
+This compiler was developed to fill some needs when dealing with C++. There are
+not very much C++ compilers open source and none of them@footnote{At the time
+of writing this document} was useful for source-to-source processing.
+Commercial, or non source-to-source ones, compilers tend to lower as early as
+possible to intermediate representations that loose track of almost all the
+source so they are not very well suited for this kind of processing. C is
+supported as it is almost a subset of C++ and because many things are easier to
+do in C than in C++ when concerning to symbolic issues.
+
+The compiler started initially in the context of OpenMP research so
+some parts of it are really well suited for it. On the other hand, the
+compiler itself is rather generic and has been used in some contexts
+not strictly related to OpenMP.
+
+@node Structure of this document
+@section Structure of this document
+@cindex structure document
+
+This document describes several aspects of the compile. The first part
+describes the core of the representation.
+
+@itemize @bullet
+@item @ref{Compilation process} outlines the whole process performed by
+the compiler. This chapter is a must read to understand how the compiler is
+actually laid out.
+@item @ref{Abstract Syntax Tree} introduces the structure used by the compiler
+to represent parsed source code.
+@item @ref{Type system} explains with detail the type system used in the compiler.
+Although this information can be always obtained from the tree, having it in a
+synthesized form eases using it.
+@item @ref{Symbols} explains the internal representation of the compiler for symbols
+and other named entities declared in the source code.
+@item @ref{Scopes and contexts} details the information that represents scopes
+and contexts, entities that represent where a given name is valid and give its
+meaning.
+@item @ref{Extensible structures and schemas} detail a feature of some structures
+in the compiler to allow storing additional information not considered originally
+by the compiler.
+@end itemize
+
+Finally, some other ``less" internals documentation, but also worthy
+of documentation.
+
+@itemize @bullet
+@item @ref{Library and tool support}. Building a compiler requires some
+special tools.
+@item @ref{Installation of mcxx}. Gives some details about how to install mcxx.
+@end itemize
+
+@node Compilation process
+@chapter Compilation process
+@cindex compilation process
+
+@menu
+* Compilation flow overview::
+* Driver::
+@end menu
+
+In this chapter a global vision of the compilation process and an explanation
+about layout of the files and directories is given.
+
+@node Compilation flow overview
+@section Compilation flow overview
+@cindex compilation flow
+
+@menu
+* Preprocessing::
+* Context free parsing::
+* Semantic analysis and type checking::
+* Compilation pipeline::
+* Prettyprinting::
+* Additional steps::
+@end menu
+
+The compiler flow can be sketched as follows.
+
+@enumerate
+@item First the source code is preprocessed.
+@item The preprocessed source is parsed. 
+@item The ambiguous tree is then analyzed semantically. 
+@item The pipeline of compilation phases is launched. 
+@item The (possibly modified) abstract syntax tree is prettyprinted into a file.
+@item Additional steps depending on the exact arguments passed.
+@end enumerate
+
+@node Preprocessing
+@subsection Preprocessing
+@cindex preprocessing
+
+In this phase the input source files are preprocessed using the configured
+preprocessor. Normally @command{gcc -E} or @command{cpp} is used.
+
+This step is mandatory since non preprocessed input files can
+form incomplete or even invalid source files. The compiler recognizes
+location marks left by the GNU-style preprocessor. This information
+can be used further by the compiler to know which file the code came from.
+
+The compiler also recognizes @code{#pragma} lines. Note that pragmas are generally
+not macro expanded from the preprocessor. This is not a limitation of mcxx
+but the way the whole compilation system works.
+
+@node Context free parsing
+@subsection Context free parsing
+@cindex context free parsing
+
+Once the code has been preprocessed it is parsed. In this step a GLR 
+parser@footnote{Currently this parser requires a somewhat special version of @command{bison-2.3}
+with support for @code{default-merge} directive. This directive is just
+a productivity option to save some writing in the grammar but it does not
+add any other functionality not existing in @command{bison-2.3}.} is used.
+This parser is built after a somewhat modified standard grammar@footnote{For efficiency reasons
+following strictly the C/C++ standard grammar is not feasible, in particular for C++. However, the grammar
+is designed to be equivalent to the standard one.} and it accepts C99@footnote{ISO/IEC 9899:1999} and 
+C++@footnote{ISO/IEC 14882:2003} syntactically valid applications.
+
+The parser tries to support several syntactic GNU extensions@footnote{mcxx tries hard to
+accept anything accepted by GCC 4.1}, mainly the
+@code{__attribute__} notation but also some other GNU idioms. Support for this
+non-standard extensions normally does not go beyond the parser unless needed
+for some later process. Do not expect the compiler to do anything clever with these
+extensions.
+
+This phase constructs the @acronym{AST, Abstract Syntax Tree} that will be used
+in all the later processes. This step does a completely @emph{context-free}
+parsing, so the tree generated here is ambiguous. Being ambiguous has several
+drawbacks, mainly the tree is completely useless. It has some benefits too,
+allows to realize how deep some ambiguities in C++ (and C, but less) are. These
+ambiguities have to be fixed, but fixing them requires contextual knowledge.
+
+Main files involved in this step are @file{src/frontend/cxx-lexer.l},
+@file{src/frontend/c99.y.in}, @file{src/frontend/cxx03.y.in}, @file{src/frontend/cxx-construct.y},
+@file{src/frontend/cxx-omp.y} and @file{src/frontend/cxx-pragma.y}.
+
+@node Semantic analysis and type checking
+@subsection Semantic analysis and type checking
+@cindex semantic analysis
+@cindex type checking
+
+In order to fix the AST generated in the previous phase, we need to gather
+symbolic information that will allow us to realize the exact meaning of the
+code. We also use this phase to label the tree with typing information deduced
+from expressions, what is typically known as ``type checking''.
+
+This two-steps process, first building the tree in the parsing phase
+and then pruning it, allows easier maintenance of the grammar (always a tough
+part of any generated parser) and simplifies the semantic part (as one has to
+deal with syntactic elements always of the same shape). Doing both things at
+the same time is possible but is much more complex, on the other hand it saves
+memory (now we are wasting memory for all the potential interpretation of
+ambiguous parts of the code).
+
+This process builds the scope (symbol tables) information needed for
+disambiguation.  The main files involved in this phase are
+@file{src/frontend/cxx-buildscope.c}, @file{src/frontend/cxx-ambiguity.c}
+and @file{src/frontend/cxx-exprtype.c}.
+
+@node Compilation pipeline
+@subsection Compilation pipeline
+@cindex compilation pipeline
+
+Once the tree has been fixed and symbolic information gathered from the source
+the compilation pipeline is started. 
+
+This compilation pipeline is a set of dynamic libraries loaded by the compiler.
+The compiler runs every phase sequentially, this phases can do anything to the
+code. Normally they modify the AST in order to make changes to the current
+code. These phases, as you will have guessed, are customizable to fit
+everyone's need. They are written in C++ and the compiler provides some sort of
+SDK to do it.
+
+These phases can be used in a sequential fashion, as the data they can compute
+can be passed to the next phases. This allows to have separate phases working
+on an additional intermediate information, besides the AST and the symbolic
+information.
+
+@node Prettyprinting
+@subsection Prettyprinting
+@cindex prettyprinting
+
+The last step done by the compiler is called prettyprinting. The resulting AST
+after the compilation pipeline phase it is prettyprinted into an output file,
+or the standard output. This step is what makes this compiler a
+source-to-source one.
+
+@node Additional steps
+@subsection Additional steps
+@cindex additional steps
+
+mcxx provides a full fledged driver that is able to invoke the native compiler
+and the linker if needed. This allows for easier usage in makefiles.
+
+@node Driver
+@section Driver
+@cindex driver
+
+The driver code is located exclusively in the files
+@file{src/driver/cxx-driver.c}, @file{src/driver/cxx-driver-decls.h} and
+@file{src/driver/cxx-driver.h}. It is a command-line application that
+handles all the compilation flow described in @ref{Compilation flow overview}.
+
+@menu
+* Configuration::
+* Extension handling::
+* Multifile processing::
+@end menu
+
+@node Configuration
+@subsection Configuration
+@cindex configuration
+
+mcxx is a `configurable' compiler this means that its behaviour can be modified by several
+means, the main being configuration files.
+
+Configuration files are stored in the directory
+@file{@emph{pkgdatadir}/config.d}. mcxx will read all files there and load
+them, so you can split your configurations in several files. There is also a
+global configuration file whose usage is deprecated. It is located at
+@file{@emph{pkgdatadir}/config.mcxx}. Using a directory with configuration files
+is preferred since it is more flexible when installing external phases, a global
+file easily suffers from overwrites.
+
+Directory @file{@emph{pkgdatadir}} is
+defined at @command{configure} time and by default it is
+@file{/usr/local/mcxx/share}.
+
+This file allows defining several profiles. The profile modifies the compiler behaviour. The
+exact profile used when running the compiler can be chosen implicitly, using the basename
+of the invocation of the compiler (this is, how it has been named to invoke it) or using
+@option{--profile=@emph{name}}. The following is an example of configuration file.
+
+@example
+# For C
+[mcc]
+language = C
+options =
+preprocessor_name = gcc
+preprocessor_options = -E 
+compiler_name = gcc
+compiler_options = 
+linker_name = gcc
+linker_options = 
+compiler_phase = libtlinstr.so
+compiler_phase = libtlomp.so
+
+# For C++
+[mcxx]
+language = C++
+options = 
+preprocessor_name = g++
+preprocessor_options = -E 
+compiler_name = g++
+compiler_options = 
+linker_name = g++
+linker_options = 
+compiler_phase = libtlinstr.so
+compiler_phase = libtlomp.so
+@end example
+
+If you want to extend this part with newer configuration options you will have
+to change file @file{driver/cxx-configfile.c} and
+@file{driver/cxx-configoptions.gperf}.
+
+@node Extension handling
+@subsection Extension handling
+@cindex extensions
+
+mcxx tries to make sensible choices when concerning extension types. For instance
+@file{.c} files are assumed to be C while @file{.C}, @file{.cc} and @file{.cpp} are
+assumed to be C++. Headers are not eligible for passing to the compiler, so
+no support is given for them although some compilers allow such case when dealing
+precompiled headers.
+
+This configuration can be changed to fit better your needs. The main file
+involving extension handling is @file{driver/cxx-fileextensions.gperf}.
+
+@node Multifile processing
+@subsection Multifile processing
+@cindex multifile
+
+mcxx allows that its compiler phases queue newer files to be processed as a result of the compilation process.
+For instance, we could have a file @file{a.c} from which we synthesize two newer files @file{a_1.c} and @file{a_2.c}.
+These two files will be processed as soon as the compiler phase pipeline of @file{a.c} ends. A file is only
+considered once for compilation. Those files can be queued in different profiles, not strictly the same as 
+the original one. This is useful for multiarchitecture environments like heterogeneous multicores.
+
+@node Abstract Syntax Tree
+@chapter Abstract Syntax Tree
+@cindex abstract syntax tree
+
+@menu
+* Tree definition::
+* Tree types::
+* Ambiguity trees::
+* List trees::
+@end menu
+
+Abstract Syntax Tree, from now AST, is the synthesized representation of the
+source code. In contrast to many other compilers, mcxx's AST will try to capture
+many syntactic details (normally unneeded or actually lowered).  This adds
+complexity to the compiler but makes happier users, specially when they have to
+check the output code. Trying to realize what is wrong when some information
+has just disappeared tends to upset the debugging user.
+
+AST is just a double linked 4-ary tree. There is a pointer to the parent node,
+except (obviously) for root nodes. While normally four children are enough for
+most situations, sometimes a fifth or sixth is needed. Instead of considering
+such cases, do not surprise if you see the compiler creating some sort of
+@emph{wrap} trees that just hold two more trees or, in particular for some GCC
+extensions, they hold the extension bit and then the standard syntax.
+
+@node Tree definition
+@section Tree definition
+@cindex tree definition
+
+@code{AST} type is defined as an opaque type to @code{struct AST_tag}. It is declared
+in @file{frontend/cxx-ast-decls.h}. The actual implementation is found in
+@file{frontend/cxx-ast.c}. It is defined as follows.
+
+@example
+struct AST_tag
+@{
+    // Node type (1024 different node types)
+    node_t node_type:10; 
+
+    // Only meaningful if expr_type != NULL
+    unsigned char expr_is_lvalue:1;
+
+    // Number of ambiguities (up to 15)
+    unsigned int num_ambig:4;
+
+    // This is a bitmap for the sons 
+    unsigned int bitmap_sons:MAX_AST_CHILDREN;
+
+    // Parent node
+    struct AST_tag* parent; 
+
+    // Node locus
+    unsigned int line; 
+    const char* filename;
+
+    // Textual information linked to the node
+    // normally the symbol or the literal
+    const char* text; 
+
+    union
+    @{
+        // The children of this tree (except for AST_AMBIGUITY)
+        struct AST_tag** children;
+        // When type == AST_AMBIGUITY, all intepretations are here
+        struct AST_tag** ambig;
+    @};
+
+    // Extensible information (created lazily)
+    extensible_struct_t* extended_data;
+
+    // For nodes holding some kind of expression
+    // this should be the related type
+    struct type_tag* expr_type;
+@};
+@end example
+@tindex AST
+@tindex AST_tag
+
+@table @code
+@item node_type
+This is the tree type, it is an integer that identifies the entity being represented with this tree.
+See @ref{Tree types} for more information about the valid values. Currently up to 1024 different nodes
+are supported.
+@item expr_is_lvalue
+When field @code{expr_type} is not null, this field can represent whether the expression itself is an lvalue or not. In C++
+this is most of the time equivalent to have a reference type in @code{expr_type}. In C this field is mandatory since no referenced
+types exist.
+@item num_ambig
+This field is only meaningful when @code{node_type} is @code{AST_AMBIGUITY} (@pxref{Ambiguity trees}). This field states
+how many ambiguities are represented in this tree.
+@item bitmap_sons
+This is a bitmap field where bit number @emph{n} (with @emph{n} from 0 to 3)
+set means that child number @emph{n} is not null.
+@item parent
+This is a pointer to a parent. Some root trees, like those from subparsing, or @code{AST_TRANSLATION_UNIT} nodes have
+a null value here.
+@item line
+@itemx filename
+These two fields identify the tree. @code{filename} is the name of the file where this tree was parsed and @code{line}
+the number within it. Note that due to preprocessing reasons, @code{filename} changes among trees.
+@item text
+This field stores textual information related to the lexed token. Many of the times this field is null and
+it is used only for symbolic names (like variables) or literals in the code.
+@item children 
+This field is only meaningful when @code{node_type} is @strong{not} @code{AST_AMBIGUITY} (@pxref{Ambiguity trees}). 
+This is a an array holding only children that are not null. The length of this array is determined
+by the number of bits set in field @code{bitmap_sons}.
+@item ambig  
+This field is only meaningful when @code{node_type} is @code{AST_AMBIGUITY} (@pxref{Ambiguity trees}). 
+Is an array of trees representing all the possible interpretations. Parser warrantees that ambiguities do not
+appear directly nested into a given ambiguity, thus none of the trees referenced in @code{ambig} array are of kind @code{AST_AMBIGUITY}
+@item expr_type 
+This field stores a pointer to a type representing the type of the expression. This field can be null for those trees that are not 
+part of an expression or, if they are, do not have a valid computed type (maybe due to failing typechecking).
+@item extended_data
+This field stores the extensible struct. This field is lazily managed, it is null for all trees where no
+extended data has been set or queried. @xref{Extensible structure}.
+@end table
+
+@node Tree types
+@section Tree types
+@cindex tree types
+
+The tree type is just an integer, represented symbolically by an enumerator.
+The enum type is created after the contents of file
+@file{frontend/cxx-asttype.def}. This file contains one tree type name per line
+and it is used to generate @file{cxx-asttype.c} at build time. In order to ease
+addition of node types, several @file{.def} files are used to generate
+@file{frontend/cxx-asttype.def}. Currently @file{cxx-asttype-base.def}
+(standard language nodes), @file{cxx-asttype-gcc.def} (GCC extension nodes),
+@file{cxx-asttype-omp.def} (OpenMP nodes), @file{cxx-asttype-pragma.def}
+(#pragma handling nodes) and @file{cxx-asttype-superscalar.def} (*Superscalar
+special nodes).
+
+Two special values exist for tree type id. @code{AST_INVALID_NODE} represents a tree with a type id zero and
+represents an internally ill formed tree (the compiler is not supposed to create any of these). @code{AST_LAST_NODE}
+is the highest type id available and all valid trees should have a value between @code{AST_INVALID_NODE} and
+@code{AST_LAST_NODE}. The compiler does not use @code{AST_LAST_NODE} for any other purpose.
+
+Other special values are @code{AST_AMBIGUITY} described in @ref{Ambiguity trees} and @code{AST_NODE_LIST} described
+in @ref{List trees}.
+
+@node Ambiguity trees
+@section Ambiguity trees
+@cindex ambiguity trees
+
+As stated in @ref{Context free parsing}, the tree as parsed directly by the GLR parser contains ambiguities. In C the
+only arising ambiguity is 
+
+@example
+void f()
+@{
+    T(a);
+@}
+@end example
+
+Statement @code{T(a)} has different interpretation depending on the exact
+meaning of @code{T}. If @code{T} is a type name then the above statement is
+equivalent to @code{T a;}, if @code{T} is not a type name (and provided
+@code{a} itself is a valid expression) then it is a call to a function
+named @code{T}.
+
+C++ raises the bar compared to C. The statement above has a third
+interpretation (though only within the context of an expression, so no
+expression vs. declaration happens but expression vs. expression) if @code{T}
+is a class name. In this later case it could be an @emph{explicit type cast}.
+
+Other ambiguities in C++ are caused by the unfortunate use of @code{<} when
+naming templates. A code like
+
+@example
+void f()
+@{
+  C<A> B;
+@}
+@end example
+
+can be parsed in several ways depending on whether @code{C}, @code{A} and
+@code{B} are or not type names. For instance, a feasible interpretation is
+equivalent to the following expression @code{C<(A>B)}.  Additional ambiguities
+are introduced by the fact that a name can either be a type name or an object
+name so 
+
+@example
+void f()
+@{
+  C<a> b;
+@}
+@end example
+
+will require knowing whether @code{a} is a type name, template name or object name (identifier) for
+a proper parse.
+
+Other ambiguities are either introduced by the standard grammar (and kept because it turns out
+to be easier to handle them later than to obfuscate the grammar itself) or by intentional modifications
+to the grammar in order to bound the ambiguity @emph{explosion}.
+
+@example
+void f()
+@{
+  A::B::D d;
+@}
+@end example
+
+If we used literally the grammar, without no restrictions in declarations, previous declaration could have
+more than eight interpretations (one for each of the ways to group @code{A}, @code{B}, @code{D}, @code{d}).
+mcxx grammar forces declarations to have at most one type specifier (or none for constructors, destructors and 
+conversion functions that do not have a type specifier in their declarations). So the above declaration
+can only be understood as a type specifier @code{A::B::D} and a declarator @code{d}. This solution works fine
+most of the time but introduces some spurious ambiguities because some keywords are either declarator specifiers
+or type specifiers.
+
+@example
+unsigned long a;
+@end example
+
+In the declaration above either @code{unsigned} or @code{long} can be the type
+specifier (actually this declaration implies an @code{int}). So two interpretations
+are given for this declaration one where @code{unsigned} is the type specifier
+and one where @code{long} is the type specifier. Choosing one or the other is non relevant
+since both constructions would lead to the same synthesized type.
+
+The parser is rather lax when allowing things, it is not designed to be foolproof so things like
+these can be accepted by the compiler even if they are blatantly invalid in C and C++.
+
+@example
+void f(struct A @{ int c; @} b)
+@{
+@}
+@end example
+
+Except for the ambiguity of the @code{unsigned long a} shown above (this one shows a syntactic quirk more
+than a context sensitive source) most ambiguities require contextual information. Even more, some require
+complex analysis, like this one requiring the possibility of instantiating a given template.
+
+@example
+int a; // This is '::a'
+
+template <typename _T>
+struct A
+@{
+  typedef _T *T;
+@};
+
+template <typename _T>
+struct A<_T*>
+@{
+  static void T(int n);
+@};
+
+void g()
+@{
+  A<int*>::T(a); // Calls 'A<int*>::T(int)' using '::a'
+  A<float>::T(a); // Equivalent to 'float *a;'
+@}
+@end example
+
+We could ignore such complex cases but this would render the C++ compiler of
+little utility since it would not be able to tell apart a declaration from a
+plain expression in some cases. An important part of the machinery of C++
+compiler is just there to implement proper parsing, in fact, to be able
+to distinguish such ambiguous cases.
+
+@node List trees
+@section List trees
+@cindex list trees
+
+Besides a hierarchic syntactic structure, languages also feature a sequential nature (for instance
+the list of parameters in a function declaration, a list of arguments in a function call, a list
+of sentences in a function body, etc). These sequences (or lists with interspersing characters
+like commas or semicolons) must be somehow represented in the tree. Because of the nature of the
+parser, a LR one, the natural way of storing these lists is in reverse order.
+
+The special node containing a list (or sequence) of things is
+@code{AST_NODE_LIST}. Although this is not always held by the compiler, every
+list or sequential alike thing should be wrapped within nodes of
+@code{AST_NODE_LIST}.
+
+These lists are stored in reverse order, so @code{ASTSon1} will give the last element of the current sublist
+and @code{ASTSon0} the remaining heading list. A list with only one element will have a null @code{ASTSon0}.
+There is no empty list, so the tree referring a list will have it as a null tree.
+
+Some algorithms do not mind being applied in reversed lists but most of the time we want them to be applied
+in forward order. This helps debugging since will process trees in the source code order. Compiler traverses
+lists using macro @code{for_each_element(list, iterator)}. This macro receives two trees: a non null list and
+an iterator variable. The iterator is actually a list, so we need to explicitly get the current element of the
+list.
+
+@example
+for_each_element(list, iter)
+@{
+   AST current_element = ASTSon1(iter);
+@}
+@end example
+
+Not allowing empty lists forces to do a check just before traversing the
+list, so making more explicit what to do when no elements are in a list.
+
+@node Type system
+@chapter Type system
+@cindex type system
+
+@menu
+* Type type::
+* Type definition::
+* Qualification::
+* Direct types::
+* Pointer types::
+* Array types::
+* Function types::
+* Vector types::
+* Unresolved function reference types::
+* Ellipsis type::
+* Computed builtin function types::
+@end menu
+
+The second most important thing handled by the compiler, beside the source code, are types. The type system is
+a world of @emph{things} that describe which values can be taken by variables in the program. These things
+are the types.
+
+Types in C/C++ have a tree-alike structure because the can be built on top of other types. Some can be rather simple
+like a pointer type but others can be as complex as a class can be, having member data types (either static or nonstatic),
+inheritance relationships with other classes, etc. Finally some types are actually constructors of other types (or represent
+an infinite set of types), these are template types. Every instance of a template type will be named here as a template
+specialized type.
+
+@node Type type
+@section Type type
+@cindex type types
+
+The C type representing a C type is @code{type_t} and it is declared in @file{frontend/cxx-typeutils.h}. It is an 
+opaque data type so only pointers to it can be used (except for the implementation file @file{frontend/cxx-typeutils.c}
+which can access the inner representation of a type). Functions to deal with types are described in the reference
+manual.
+
+Types in the type system are most of the time immutable. This means that once we are given a reference to a type
+it will not change. This paragraph reads @emph{most of the time} because there are some moments where a type has a transient
+nature before it is completely defined. This happens for class types since their members can be defined later. For instance,
+
+@example
+struct A;
+struct B
+@{
+  A *a;
+@};
+struct A
+@{
+  B *b;
+@};
+@end example
+
+There is a moment where type of class @code{A} does not have any member (when it is referenced in @code{A* a;}) and then
+later it is given a member @code{b} (with class type @code{B}). More precisely, for the class @code{B}, the type is initially
+an empty class type and then it is filled with members incrementally. But this moments of mutability are just special cases
+for classes, normally types are of immutable nature.
+
+Working with pointer to class types with (almost) immutable nature allows the
+compiler to try to share as most as possible data types. Not all data types can
+be effectively shared but most of them are. For instance, all references to an
+@code{int} type are the same, and so are all the references to @code{const
+int}, @code{int*}.  Whether a type is shared or not does not determine whether
+it represents the same type, it simply makes the answer faster. Never test equality
+by pointer comparison, always use function @code{equivalent_types}.
+
+Types can be one of the following:
+
+@itemize @bullet
+@item Direct types. These can represent lots of different types. @xref{Direct types}.
+@item Pointer types. @xref{Pointer types}.
+@item Pointer to member types. @xref{Pointer types}.
+@item Reference types. @xref{Pointer types}.
+@item Array types. @xref{Array types}.
+@item Function types. @xref{Function types}.
+@item Vector type. @xref{Vector types}.
+@item Unresolved function reference type. @xref{Unresolved function reference types}.
+@item Ellipsis type. @xref{Ellipsis type}.
+@item Computed builtin function type. @xref{Computed builtin function types}.
+@end itemize
+
+@node Type definition
+@section Type definition
+@cindex type definition
+
+Type @code{type_t} is defined in @file{frontend/cxx-typeutils.c}.
+
+@example
+struct type_tag
+@{
+    // Kind of the type
+    enum type_kind kind:4;
+
+    // See below for more detailed descriptions
+    unsigned char is_template_specialized_type:1;
+    unsigned char valid_size:1;
+    // This one states if the type has been created with
+    // invalid information. Currently only arrays
+    // can cause this kind of problems
+    unsigned char is_faulty:1;
+
+    // Pointer
+    // (kind == TK_POINTER)
+    // (kind == TK_POINTER_TO_MEMBER)
+    pointer_info_t* pointer;
+
+    // Array
+    // (kind == TK_ARRAY)
+    array_info_t* array;
+
+    // Function
+    // (kind == TK_FUNCTION)
+    function_info_t* function;
+
+    // "Simple" type
+    // (kind == TK_DIRECT)
+    simple_type_t* type;
+    
+    // For unresolved overload function types 
+    // (kind == TK_OVERLOAD)
+    scope_entry_list_t* overload_set;
+    template_argument_list_t* explicit_template_argument_list;
+
+    // Vector Type
+    // (kind == TK_VECTOR)
+    vector_info_t* vector;
+
+    // cv-qualifier related to this type
+    // The cv-qualifier is in the type
+    cv_qualifier_t cv_qualifier;
+
+    // Unqualified type, itself if the type is not qualified
+    struct type_tag* unqualified_type;
+
+    // For parameter types, if not null it means
+    // some adjustement was done
+    struct type_tag* original_type;
+    // For template specialized parameters
+    // --> char is_template_specialized_type;
+    template_argument_list_t* template_arguments;
+    struct type_tag* related_template_type;
+    // It is not obvious why do we need this, but it is for
+    // checking that unification actually succeed
+    // It is only NON-null for complete types
+    template_parameter_list_t* template_parameters;
+
+    // The sizeof and alignment of the type
+    // They are only valid once 'computed_size' is true
+    // --> char valid_size;
+    _size_t size;
+    _size_t alignment;
+    // This is here only for C++
+    _size_t data_size;
+
+    // (kind == TK_COMPUTED)
+    computed_function_type_t compute_type_function;
+@};
+@end example
+@tindex type_t
+@tindex type_tag
+
+Its fields are documented below.
+
+@table @code
+@item kind 
+Is the kind of the type. Up to 16 different types are possible. Below are the values it can have
+@table @code
+@item TK_DIRECT
+Direct types.
+@item TK_POINTER
+Pointer types.
+@item TK_LVALUE_REFERENCE
+Reference types.
+@item TK_POINTER_TO_MEMBER
+Pointer to member types.
+@item TK_ARRAY
+Array types.
+@item TK_FUNCTION
+Function types.
+@item TK_OVERLOAD
+Unresolved function reference.
+@item TK_VECTOR
+Vector types.
+@item TK_ELLIPSIS
+Ellipsis type (...)
+@item TK_COMPUTED
+Computed builtin function types.
+@end table
+@item pointer
+
+A field to a @code{pointer_info_t}, described in @ref{Pointer types}. This field
+is non-null only when kind is @code{TK_POINTER}, @code{TK_POINTER_TO_MEMBER} or
+@code{TK_LVALUE_REFERENCE}.
+
+@item array
+
+A field to a @code{array_info_t}, described in @ref{Array types}. This field is
+non-null only when kind is @code{TK_ARRAY}.
+
+@item type
+
+A field to a @code{simple_type_t}, described in @ref{Direct types}. This field
+is non-null only when kind is @code{TK_DIRECT}.
+
+@item overload_set
+@itemx explicit_template_argument_list
+
+Field @code{overload_set} contains a set of symbols (@pxref{Symbols})
+representing all potentially eligible symbols for this function reference, as
+in
+
+@example
+void f(int);
+void f(float);
+void f(char);
+
+void h(void*);
+
+void g()
+@{
+   // 'f(int)' is chosen among all given 'f'
+   h((void (*)(int))f); 
+@}
+@end example
+
+Some overloaded references require knowing the actual template argument list
+(@pxref{Template arguments}) like in the example below. This is stored in
+@code{explicit_template_argument_list} field.
+
+@example
+template <typename _Q>
+void f(_Q);
+
+void h(void*);
+
+template <typename _T>
+void g()
+@{
+   h(f<_T*>); 
+@}
+@end example
+
+@item vector
+
+This field is only non-null when @code{kind} is @code{TK_VECTOR}. It points to a @code{vector_info_t} structure
+defined in @ref{Vector types}.
+
+@item cv_qualifier
+
+This holds a value of the cv-qualifier. @xref{Qualification}.
+
+@item unqualified_type
+
+This is a pointer to the unqualified type of the current type. If the type is already unqualified
+it points to itself. @xref{Qualification}.
+
+@item original_type
+
+If the type has been adjusted because it is the type of a function parameter, this type holds the non adjusted type.
+Otherwise it will be null.
+
+@example
+void f(int a[5]);
+@end example
+
+Type of parameter @code{a} will be @code{int*} but its original type will be @code{int[5]}.
+
+@item is_template_specialized_type
+@itemx template_arguments
+@itemx related_template_type
+
+@xref{Templates}. These store information for specialized template types. This is, types that
+are specialization of a given template, either class or function.
+
+@item template_parameters
+
+These store template parameters and are only used for templated types. @xref{Templates}.
+
+@item size
+
+This field should contain the size in bytes of the underlying type. This is a experimental
+feature and it is not expected to work nor to be useful. 
+
+@item compute_type_function
+
+This is a pointer to a function with the following prototype
+
+@example
+typedef type_t* (*computed_function_type_t)
+      (scope_entry_t* symbol, 
+       AST* argument, 
+       int num_arguments);
+@end example
+
+This field is only used when @code{kind} is @code{TK_COMPUTED}. Only builtin
+functions in C (not C++) can have a type of @code{TK_COMPUTED}.
+
+Function pointed by @code{compute_type_function} will be invoked everytime the
+compiler needs to know the exact type resulting of the builtin function call. This function receives
+the builtin function symbol (@pxref{Symbols}) and an array of trees (@pxref{Abstract Syntax Tree})
+with @code{num_arguments} elements. 
+
+The function returns a function type (@pxref{Function types}) and the result
+type of this function type will be the one used as a result type of the whole
+call. @xref{Computed builtin function types}.
+
+@item valid_size
+@item size
+@item alignment
+@item data_size
+
+Flag @code{valid_size} holds whether the type has a valid computed size or not.
+This is used for lazy type size computation. When it is true values of later fields 
+are valid.
+
+These fields are related to size computation of types. Field @code{size} stores the size in @code{sizeof(char)} 
+of a type, @code{alignment} is the natural alignment of the type in bytes. Field @code{data_size} is exclusive of
+C++ and stores the size of a type without taking
+into account its alignment.
+
+@end table
+
+@node Qualification
+@section Qualification
+@cindex cv qualification
+
+C and C++ allow a type to be qualified. This means that a given type @code{T}
+can be qualified with any of  @code{const}, @code{volatile} or @code{restrict}.
+
+To implement efficiently these types, the compiler has several sets indexed by
+the pointer of the unqualified type corresponding to every possible combination
+of the qualifiers. This is, seven sets (the missing one is the case of the
+unqualified version) where the identical type is stored and only differs in the
+qualification. 
+
+This allows sharing types while also allows to query to the type system for a
+reference of a qualified type given any type efficiently.
+
+The type representing the cv-qualification of a type is @code{cv_qualifier_t}
+and is a bitmap holding three bits: @code{CV_CONST}, @code{CV_VOLATILE} and
+@code{CV_RESTRICT}. For convenience, @code{CV_NONE} is also provided.
+
+Bitmap arithmetic can be performed on this values and several functions can be
+used to determine whether a type is less qualified than another. 
+
+Every type can be qualified. Function types can be qualified when they are
+the type of a nonstatic member function. References should not be qualified.
+Arrays types can be qualified as of C99. Unresolved function references
+are never qualified.
+
+@node Direct types
+@section Direct types
+@cindex direct types
+
+@menu
+* Enum types::
+* Class types::
+* Dependent typenames::
+@end menu
+
+Direct types represent the set of types that cannot be represented, or we do not want to
+represent, using other types. This mainly includes builtin types, those provided by C and C++
+but some other types that are actually built on top of others but is more convenient
+to represent them as a single entity, like class types.
+
+The data type holding a direct type is @code{simple_type_t} defined in @file{frontend/cxx-typeutils.c}.
+It is defined as follows.
+
+@example
+typedef 
+struct simple_type_tag @{
+    // Kind
+    simple_type_kind_t kind:4;
+
+    // if Kind == STK_BUILTIN_TYPE here we have
+    // the exact builtin type
+    builtin_type_t builtin_type:4;
+
+    // This can be 0, 1 (long) or 2 (long long)
+    unsigned char is_long:2; 
+    // short
+    unsigned char is_short:1;
+    // unsigned
+    unsigned char is_unsigned:1;
+    // signed
+    unsigned char is_signed:1;
+
+    // GCC extension
+    // __Complex float
+    unsigned char is_complex:1;
+
+    // States whether this type is incomplete, by default all classes and enum
+    // type are incomplete and they must be 
+    unsigned char is_incomplete:1;
+
+    // For typeof and template dependent types
+    // (kind == STK_TYPEOF)
+    // (kind == STK_TEMPLATE_DEPENDENT_TYPE)
+    unsigned char typeof_is_expr:1;
+
+    // This type exists after another symbol, for
+    // instance
+    //
+    // class A
+    // @{
+    // @};
+    // A b;
+    //
+    // creates an 'A' symbol of type SK_CLASS and
+    // a 'b' symbol SK_VARIABLE with type
+    // STK_USER_DEFINED pointing to 'A' symbol
+    struct scope_entry_tag* user_defined_type;
+
+    // For typedefs (kind == STK_TYPEDEF)
+    // the aliased type
+    struct type_tag* aliased_type;
+
+    // For enums (kind == STK_ENUM)
+    enum_info_t* enum_info;
+    
+    // For classes (kind == STK_CLASS)
+    // this includes struct/class/union
+    class_info_t* class_info;
+    
+    // Used when instantiating a template class
+    // (kind == STK_CLASS)
+    AST template_class_base_clause;
+    AST template_class_body;
+
+    // Decl environment where this type was
+    // declared if not builtin The scope where
+    // this type was declared since sometimes,
+    // types do not have any name related to them
+    // (kind == STK_ENUM)
+    // (kind == STK_CLASS)
+    decl_context_t type_decl_context;
+
+    // For typeof and template dependent types
+    // (kind == STK_TYPEOF)
+    // (kind == STK_TEMPLATE_DEPENDENT_TYPE)
+    AST typeof_expr;
+    decl_context_t typeof_decl_context;
+
+    // For instantiation purposes
+    // 
+    // The specialized template has already been
+    // instantiated
+    // (kind == STK_CLASS)
+    template_nature_t template_nature;
+
+    // For template types
+    template_parameter_list_t* template_parameter_list;
+    // This is a STK_USER_DEFINED
+    type_t* primary_specialization;
+    // Sometimes we need the original symbol
+    // defining this template type
+    scope_entry_t* related_template_symbol;
+
+    // Specialized types
+    int num_specialized_types;
+    // These are a STK_USER_DEFINED
+    type_t** specialized_types;
+
+    // Template dependent types
+    // (STK_TEMPLATE_DEPENDENT_TYPE)
+    scope_entry_t* dependent_entry;
+    AST dependent_nested_name;
+    AST dependent_unqualified_part;
+@} simple_type_t;
+@end example
+@tindex simple_type_tag
+@tindex simple_type_t
+
+@table @code
+@item kind
+This contains the kind of this simple type. Do not confuse with the type of @code{type_t} shown above.
+Possible values for this field are 
+
+@table @code
+@item STK_BUILTIN_TYPE
+This represents a builtin type like @code{int}, @code{float}, @code{double}, etc.
+@item STK_CLASS
+This is a class type. Both named and unnamed classes (structs or unions too) are represented
+with a type of kind @code{STK_CLASS}.
+@item STK_ENUM
+This is an enum type. Both named and unnamed enums have an underlying @code{STK_ENUM} direct type.
+@item STK_TYPEDEF
+This is a typedef, so a synonym for an existing type.
+
+@example
+typedef int T;
+@end example
+
+Will create a symbol @code{T} with type @code{TK_DIRECT} of kind @code{STK_TYPEDEF}.
+
+@item STK_USER_DEFINED
+This is a named type. Every type that is defined after a symbol it is a @code{STK_USER_DEFINED}.
+For instance
+
+@example
+struct A @{ @};
+A a;
+@end example
+
+Variable @code{a} will have as type a @code{TK_DIRECT} of kind @code{STK_USER_DEFINED}. This
+named type will refer to @code{A} symbol, a class name, which will have a type @code{TK_DIRECT}
+of kind @code{STK_CLASS}.
+
+On the other hand
+
+@example
+struct @{ @} b;
+@end example
+
+Variable @code{b} will have as type a @code{TK_DIRECT} of kind @code{STK_CLASS}, without any intermediate
+name. Typedefs can be used to name things both in C and C++. For instance
+
+@example
+typedef struct @{ @} C;
+C c;
+@end example
+
+Variable @code{c} will have as type a @code{TK_DIRECT} of kind @code{STK_USER_DEFINED} referring to a @code{C}
+that it is actually a typedef name aliasing a @code{TK_DIRECT} of kind @code{STK_CLASS}.
+
+@item STK_TEMPLATE_TYPE
+This is a template type. This type exists to hold in only one place all possible specializations related to a type.
+For instance
+
+@example
+template <typename _T>
+struct A @{ @};
+@end example
+
+will create a symbol @code{A} with type @code{TK_DIRECT} of kind @code{STK_TEMPLATE_TYPE}. In addition the compiler
+will link it with its @emph{primary template type} that will be a type @code{TK_DIRECT} of kind @code{STK_CLASS}
+and will represent the primary template. When, some lines below the compiler finds
+
+@example
+template <typename _T>
+struct A<_T*> @{ @};
+@end example
+
+It will link to the @code{STK_TEMPLATE_TYPE} a specialization, again with kind @code{STK_CLASS}.
+
+@item STK_TEMPLATE_DEPENDENT_TYPE
+This is a template dependent type. This is a type that cannot be truly known at
+compile time and must be delayed till instantiation. Nevertheless, we have to
+be able to compare them so a value for this type is created.
+
+In the following example, when checking the second function declaration of
+@code{f<_Q>} we need to know that the previous declaration of @code{f<_T>} is
+not an overload.
+
+@example
+template <typename _T>
+void f(typename _T::K);
+
+template <typename _Q>
+void f(typename _Q::K);
+@end example
+
+@item STK_VA_LIST
+This represents the type of GCC @code{__builtin_va_list}.
+@item STK_TYPEOF
+This is the type built after the GCC @code{__typeof__} extension. Currently this type is never
+generated since it is lowered to the type of the expression referenced in the @code{typeof}.
+Since it was in previous versions of the compilers, it is likely that some parts of the code
+still add support for typeof.
+@end table
+
+@item builtin_type
+If field @code{kind} is @code{STK_BUILTIN_TYPE} then this field will contain the exact
+builtin named by this type. Values that this field can take are the following
+
+@table @code
+@item BT_INT
+Something that it is an @code{int}. All sorts of @code{int} will have this
+value set, including (but not limiting to) @code{short int}, @code{long int},
+@code{unsigned int}, etc.
+@item BT_BOOL
+A C++ @code{bool} or C99 @code{_Bool}.
+@item BT_FLOAT
+A @code{float}.
+@item BT_DOUBLE
+A @code{double} or C99 @code{long double}.
+@item BT_CHAR
+A @code{char} including @code{signed char} and @code{unsigned char}.
+@item BT_WCHAR
+C++ @code{wchar_t}.
+@item BT_VOID
+A @code{void} type.
+@end table
+
+@item is_long
+
+Holds whether the type has been qualified with @code{long}. This only applies for
+@code{int} and @code{double}.
+
+When its value is @code{0} it means no @code{long} qualification. For both
+@code{int} and @code{double} it can be @code{1}, meaning, respectively,
+@code{long int} and @code{long double}. In addition for @code{int}, it can be
+@code{2} meaning @code{long long int}.
+
+@item is_short
+Holds whether the @code{int} is @code{short}.
+
+@item is_unsigned
+Holds whether the @code{int} or @code{char} is @code{unsigned}.
+
+@item is_signed
+Holds whether the @code{char} is @code{signed}. Note that this flag is
+also set for @code{int}, but the Standards dictate that @code{int} types
+are always signed by default. This does not happen with @code{char}.
+
+@item is_complex
+Holds whether the type is a C99 complex type like @code{_Complex float} or
+@code{_Complex double}.
+
+@item user_defined_type
+
+When @code{kind} is @code{STK_USER_DEFINED} this field contains the symbol
+(@pxref{Symbols}) that represents this type.
+
+@example
+struct A @{ @} a;
+@end example
+
+Type of @code{a} will be @code{TK_DIRECT} of kind @code{STK_USER_DEFINED} and @code{user_defined_type} will
+reference the symbol @code{A}.
+
+@item aliased_type
+
+When @code{kind} is @code{STK_TYPEDEF} this field contains the aliased type.
+
+@example
+typedef int* p_int;
+@end example
+
+Symbol @code{p_int} will have as type a @code{TK_DIRECT} of kind @code{STK_TYPEDEF} and @code{aliased_type}
+will reference a type @code{TK_POINTER} of the @code{int} (@pxref{Pointer types}).
+
+@item enum_info
+
+When @code{kind} is @code{STK_ENUM} this points to the enum type information structure. @xref{Enum types}.
+
+@item class_info
+
+When @code{kind} is @code{STK_CLASS} this points to the class type information structure. @xref{Class types}.
+
+@item template_class_base_clause
+@itemx template_class_body
+
+When this class is the class type of a template class, this two trees hold its body and the base clause
+for further instantiation.
+
+@example
+template <typename _T>
+struct A @{ @};
+
+template <typename _Q>
+struct B : A<_Q>
+@{
+    _Q t;
+@};
+@end example
+
+The related class type of @code{B} (for its primary one, in particular) we will save in @code{template_class_base_clause}
+the tree @code{A<_Q>} and in @code{template_class_body} @code{_Q t;}.
+@item type_decl_context
+When @code{kind} is @code{STK_CLASS} or @code{STK_ENUM} we save the context (@pxref{Scopes and contexts})
+of the type. This is used in argument dependent lookup (Koenig lookup), for instance.
+@item typeof_expr
+This would store the expression tree of a @code{__typeof__}. Since currently we are not
+generating any @code{STK_TYPEOF} type, this field remains unused.
+@item typeof_decl_context
+The context (@pxref{Scopes and contexts}) of the typeof expression.
+@item typeof_is_expr
+Holds whether the typeof is actually an expression or not because GCC allows a typeof against
+an abstract declarator.
+@example
+typedef int T;
+__typeof__(T) t; // Like doing 'int t;'
+@end example
+
+@item template_nature
+Contains the template nature of the current template type. @xref{Template nature}.
+
+@item template_parameter_list
+If this type kind is @code{STK_TEMPLATE_TYPE} then this field contains its template parameters. @xref{Template
+parameters}.
+
+@item primary_specialization
+If this type kind is @code{STK_TEMPLATE_TYPE} then this field contains the @emph{primary specialization}.
+For template classes this is the primary template class, for function templates it means the function
+template declarated itself.
+
+@example
+template <typename _T> // (A-1)
+struct A @{ @}; 
+
+template <typename _T> // (A-2)
+struct A<_T*> @{ @};
+
+template <> // (A-3)
+struct A<> @{ @};
+@end example
+
+For the template class @code{A}, its primary template will be the one declared in @code{(A-1)}.
+
+@example
+template <typename _T> // (f-a-1)
+void f(_T t) @{ @}
+
+template <typename _T> // (f-b-1)
+void f(_T* t) @{ @}
+
+// These are explicit instantiations
+template void f<int>(int); // (f-a-2)
+template void f<int>(int*); // (f-b-2)
+@end example
+
+In this example, there will be two @code{f} symbols of type
+@code{STK_TEMPLATE_TYPE} with their primary specialization set to the type of
+the declaration. Thus the first one, @code{f-a-1}, will have as primary
+specialization type @code{void (_T)} and the second one, @code{f-b-1},
+@code{void (_T*)}.
+
+@item related_template_symbol
+
+If this type kind is @code{STK_TEMPLATE_TYPE} then this field contains the symbol that 
+caused this type to exist. This is only needed to implement the following case.
+
+@example
+template <template <typename> class _V, typename _T> // (A-3)
+struct A<_V<_T> > @{ @};
+@end example
+
+During unification we need to know whether @code{_V<_T>} is a @code{template-id} built
+after a template template parameter (like in this case, symbol @code{_V}) or not (like
+@code{A<int>}, built after template-class @code{A}).
+
+@item num_specialized_types
+@itemx specialized_types
+
+When @code{kind} is @code{STK_TEMPLATE_TYPE} this fields store the number of specializations
+related to this template. For the example shown above @code{A-2}, and @code{A-3} will be
+linked as specializations of the type of @code{A} (recall that its primary specialization
+is @code{A-1}). For template functions @code{f-a-1} and @code{f-b-1}, each one will have
+one specialization @code{f-a-2} and @code{f-b-2}, respectively.
+
+@item dependent_entry
+@itemx dependent_nested_name
+@itemx dependent_unqualifed_part
+When @code{kind} is @code{STK_TEMPLATE_DEPENDENT_TYPE} these fields store the needed information
+of this type when it concerns to comparisons. @xref{Dependent typenames}.
+@end table
+
+@node Enum types
+@subsection Enum types
+@cindex enum types
+
+An enum type requires additional information that it is stored in @code{enum_info_t}.
+
+@example
+typedef 
+struct enum_information_tag 
+@{
+    int num_enumeration; 
+    struct scope_entry_tag** enumeration_list; 
+@} enum_info_t;
+@end example
+@tindex enum_information_tag
+@tindex enum_info_t
+
+@table @code
+@item num_enumeration
+The number of enumerators (the name of the field should be fixed) of
+this enum.
+@item enumeration_list
+The symbols representing every enumerator.
+@end table
+
+For instance,
+
+@example
+enum @{ A = 3, C = 4 @} e;
+@end example
+
+Variable @code{e} will have @code{TK_DIRECT} of kind @code{STK_ENUM} and its enum info will reference
+two enumerators @code{A} and @code{C}.
+
+@node Class types
+@subsection Class types
+@cindex class types
+
+@menu
+* Base classes::
+@end menu
+
+
+Class types require lots of informations to be stored, in special in C++. This information
+is represented in @code{class_info_t}.
+
+@example
+typedef
+struct class_information_tag @{
+    // Kind of class @{struct, class@}
+    enum class_kind_t class_kind:4;
+
+    // A dependent class
+    unsigned char is_dependent:1;
+    // Currently unused
+    unsigned char is_local_class:1;
+
+    struct scope_entry_tag* enclosing_function;
+
+    // The inner decl context created by this class
+    decl_context_t inner_decl_context;
+
+    // Destructor
+    struct scope_entry_tag* destructor;
+
+    // Member functions
+    int num_member_functions;
+    struct scope_entry_tag** member_functions;
+
+    // Conversion functions info
+    int num_conversion_functions;
+    struct scope_entry_tag** conversion_functions;
+
+    // Operator function info
+    int num_copy_assignment_operator_functions;
+    struct scope_entry_tag** copy_assignment_operator_function_list;
+
+    // Class constructors info
+    int num_constructors;
+    struct scope_entry_tag** constructor_list;
+
+    // Default constructor
+    struct scope_entry_tag* default_constructor;
+
+    // Copy constructors
+    int num_copy_constructors;
+    struct scope_entry_tag** copy_constructor_list;
+
+    // Nonstatic data members
+    int num_nonstatic_data_members;
+    struct scope_entry_tag** nonstatic_data_members;
+    
+    // Static data members
+    int num_static_data_members;
+    struct scope_entry_tag** static_data_members;
+
+    // Base (parent classes) info
+    int num_bases;
+    base_class_info_t** base_classes_list;
+
+    // Virtual base info (used only when laying types)
+    int num_virtual_bases;
+    virtual_base_class_info_t** virtual_base_classes_list;
+
+    // Info for laying out 
+    _size_t non_virtual_size;
+    _size_t non_virtual_align;
+@} class_info_t;
+@end example
+@tindex class_info_t
+@tindex class_information_tag
+
+@table @code
+@item class_kind
+This is the kind (or the key) of the class. It can be one of @code{CK_STRUCT},
+@code{CK_UNION}, @code{CK_CLASS}. This is currently unused, so expect it to be
+set to @code{CK_STRUCT} all the time.
+@item is_dependent
+States if the class type is dependent. This holds for template classes
+that are not an explicit specialization.
+@item is_local_class
+@itemx enclosing_function
+These two are unused. They should contain whether the class has been defined
+inside a function body, and the function itself.
+@item inner_decl_context
+The context (@pxref{Scopes and contexts}) created by the class itself when it
+is defined. Every member of this class will be signed in this context.
+@item destructor
+The symbol representing the function of the destructor.
+@item num_conversion_functions
+@itemx conversion_functions
+A list of symbols representing user defined conversions by means of conversion functions.
+@item num_copy_assignment_operator_functions
+@itemx copy_assignment_operator_function_list
+A list of symbols that are copy assignment functions. Copy assignment functions
+are those that implement the @emph{assignment} operation within the class.
+
+@example
+struct A
+@{
+  // Copy assignment operator
+  A& operator=(const A& a);
+@};
+@end example
+
+@item num_constructors
+@itemx constructor_list
+
+A list of symbols that are constructors of the class. This includes also
+the copy constructors.
+
+@item num_copy_constructors
+@itemx copy_constructor_list
+
+A list of symbols that are copy constructor functions. Copy constructor functions
+implement the @emph{copy} operation within a class.
+
+@example
+struct A
+@{
+  // Copy constructor
+  A(const A&);
+@};
+@end example
+
+@item num_nonstatic_data_members
+@itemx nonstatic_data_members
+
+A list of symbols that are nonstatic data members.
+
+@example
+struct A
+@{
+  int a;
+@};
+@end example
+
+In C, all fields will fall in this category.
+
+@item num_static_data_members
+@itemx static_data_members
+
+A list of symbols that are static data members.
+
+@example
+struct A
+@{
+  static int a;
+@};
+@end example
+
+@item num_bases
+@itemx base_classes_list
+
+The number of direct base classes of the current
+class. Only the nondependent bases are registered
+here. Dependent bases are not considered.
+
+@example
+struct A @{ @};
+template <typename _T>
+struct B @{ @};
+
+template <typename _Q>
+struct C : public A, B<_Q>
+@{
+@};
+@end example
+
+In the previous example, only @code{A} will be signed in as a base of the
+primary template class @code{C}. Nondependent specializations of @code{C} will
+have both classes registered as bases.
+
+@item num_virtual_bases
+@item virtual_base_classes_list
+
+When laying out a class type it is required
+to know the offset of virtual bases. Field
+@code{virtual_base_classes_list} is an array,
+with @code{num_virtual_bases} of
+@code{virtual_base_class_info_t}. Note that
+this array will include all direct virtual bases of the
+class (already represented in
+@code{base_classes_list}) but also those that are
+indirect because of inheritance.
+
+@item non_virtual_size
+@item non_virtual_align
+
+These two fields hold information related to the
+size and alignment of a class type when virtual
+bases are not considered.
+
+@end table
+
+@node Base classes
+@subsubsection Base classes
+@cindex base classes
+
+Base classes require a bit more of information than just the symbol.
+
+@example
+typedef 
+struct base_class_info_tag
+@{
+    // The parent class type
+    struct type_tag* class_type;
+
+    // The parent class symbol
+    struct scope_entry_tag* class_symbol;
+
+    // The access specifier (public, private, protected inheritance)
+    access_specifier_t access_specifier;
+
+    // A virtual base
+    unsigned char is_virtual:1;
+
+    // Used when laying classes out
+    _size_t base_offset;
+@} base_class_info_t;
+@end example
+@tindex base_class_info_t
+@tindex base_class_info_tag
+
+@table @code
+@item class_type
+This field is redundant. Field @code{class_symbol} always allows to get the type. Maybe it will be
+removed in the future.
+@item class_symbol
+The symbol of the base class
+@item access_specifier
+States the kind of inheritance. This field is currently unused.
+@item is_virtual
+Holds if the inheritance is virtual. This field is used when performing class
+scope lookup in the inheritance hierarchy
+@item base_offset
+Holds the offset of this base. This is needed when
+laying out bases of class types, since sometimes
+conflicts might arise in empty base classes.
+@end table
+
+When laying out a class type the set of
+(direct or indirect) virtual base classes are
+represented in the field
+@code{virtual_base_classes_list} of a
+@code{class_info_t}. Only offset is actually
+stored for every virtual baese class.
+
+@example
+typedef
+struct virtual_base_class_info_tag
+@{
+    struct scope_entry_tag* virtual_base;
+    _size_t virtual_base_offset;
+@} virtual_base_class_info_t;
+@end example
+@tindex virtual_base_class_info_t
+@tindex virtual_base_class_info_tag
+
+@node Dependent typenames
+@subsection Dependent typenames
+@cindex dependent typenames
+
+Dependent typenames are those that are created by means of a qualified dependent type.
+For instance both @code{a} and @code{b} have dependent typenames as types.
+
+@example
+template <typename _T>
+struct B @{ @};
+
+namespace C
+@{
+template <typename _T>
+struct D @{ @};
+@}
+
+template <typename _T>
+struct A
+@{
+   typename _T::K1 a;
+   typename _T::Q1::K2 b;
+   typename B<_T>::K3 c;
+   typename C::D<_T>::K4 d;
+   typename C::D<_T>::Q2::K5 e;
+@};
+@end example
+
+Dependent typenames cannot be compared technically at compile time. The comparison will
+check if both types are necessarily the same under the templated environment. Dependent
+typenames are represented with three parts in @code{simple_type_t} (@pxref{Direct types}).
+
+@table @code
+@item dependent_entry
+The symbol where, after it, nothing can be looked up.
+@item dependent_nested_name
+The path leading to @code{dependent_unqualifed_part} after @code{dependent_entry}.
+@item dependent_unqualifed_part
+The final part of the dependent typename.
+@end table
+
+Consider the following examples
+
+@multitable @columnfractions .40 .20 .20 .20
+@headitem Type specifier @tab @code{dependent_entry} @tab @code{dependent_nested_name} @tab @code{dependent_unqualifed_part}
+@item @code{typename _T::K1} @tab @code{_T} @tab @tab @code{K1}
+@item @code{typename _T::Q1::K2} @tab @code{_T} @tab @code{Q1::} @tab @code{K2}
+@item @code{typename B<_T>::K3} @tab @code{B<_T>} @tab @tab @code{K3}
+@item @code{typename C::D<_T>::K4} @tab @code{C::D<_T>} @tab @tab @code{K4}
+@item @code{typename C::D<_T>::Q2::K5} @tab @code{C::D<_T>} @tab @code{Q2::} @tab @code{K5}
+@end multitable
+
+@node Pointer types
+@section Pointer types
+@cindex pointer types
+
+In this cathegory we group proper pointer types (@code{TK_POINTER}), pointer to
+member types (@code{TK_POINTER_TO_MEMBER}) and reference types
+(@code{TK_LVALUE_REFERENCE}). @xref{Type definition}. 
+
+Their information is represented in @code{pointer_info_t}.
+
+@example
+typedef 
+struct pointer_tag
+@{
+    // The pointee type
+    struct type_tag* pointee;
+
+    // If the type was a TK_POINTER_TO_MEMBER
+    // the pointee class
+    struct scope_entry_tag* pointee_class;
+@} pointer_info_t;
+@end example
+@tindex pointer_info_t
+@tindex pointer_info_tag
+
+@table @code
+@item pointee
+This is the pointed type for pointer types and pointer to member types. For reference types
+this is the referenced type.
+@item pointee_class
+For pointer to member types, this is the class of the pointer to member type. It is null
+in any other case.
+@end table
+
+@node Array types
+@section Array types
+@cindex array types
+
+Array types (@code{TK_ARRAY}) are represented in @code{array_info_t}.
+
+@example
+typedef 
+struct array_tag
+@{
+    // Array sizes
+    AST array_expr;
+    // Scope of the array size expression
+    decl_context_t array_expr_decl_context;
+
+    // The type of the array elements
+    struct type_tag* element_type;
+
+    // Is literal string type ?
+    unsigned char is_literal_string:1;
+@} array_info_t;
+@end example
+@tindex array_info_t
+@tindex array_tag
+
+@table @code
+@item array_expr
+@itemx array_expr_decl_context
+This is the size expression of the array. @code{array_expr} can be null if the array type is unbounded.
+@item element_type
+The type of the element of the array. If the array is multidimensional this will be another array.
+@item is_literal_string
+This flag states whether this type is a literal string. Literal strings have array type both in C 
+and C++. But C++ allows an additional deprecated conversion from a literal string type
+to a plain pointer to char. So the following is valid in C++
+
+@example
+void f(char *c);
+
+void g(void)
+@{
+    f("hello");
+@}
+@end example
+@end table
+
+The type of @code{"hello"} is @code{const char[6]} (it is not 5 because of the additional @code{NULL} at the end) and a plain
+array-to-pointer conversion would yield @code{const char*} which in C++ cannot be converted to @code{char*},
+the type of parameter @code{c} in function @code{f}. So we need a way to distinguish this special case.
+
+@node Function types
+@section Function types
+@cindex function types
+
+Function types (@code{TK_FUNCTION}) are represented in @code{function_info_t}.
+
+@example
+typedef 
+struct function_tag
+@{
+    // The returning type of the function
+    struct type_tag* return_type;
+
+    // Parameter information
+    int num_parameters;
+    parameter_info_t** parameter_list;
+
+    // Contains the function definition tree 
+    // (if the function has been defined)
+    AST definition_tree;
+    
+    // For instantiation purposes
+    template_nature_t template_nature;
+
+    // Is dependent
+    unsigned char is_dependent:1;
+
+    // States if this function has been declared
+    // or defined without prototype.  This is only
+    // meaningful in C but not in C++ where all
+    // functions do have prototype
+    unsigned char lacks_prototype:1;
+@} function_info_t;
+@end example
+@tindex function_tag
+@tindex function_info_t
+
+@table @code
+@item return_type
+This is the return type of the function. If the function type is the one of a constructor, destructor
+or conversion functor it will be null.
+@item definition_tree
+This is used only in C++ when a function is instantiated. This is only for
+function types that are specialized template types.
+@item num_parameters
+@itemx parameter_list
+The list of parameters of the function.
+@item lacks_prototype
+States if the function has been declared without prototype like in C (not in C++) when 
+the programmer writes function declarations like
+@example
+void f();
+void g(a, b);
+@end example
+@end table
+
+Parameter types are stored in @code{parameter_info_t} structures. This type is
+non opaque and is declared in @file{frontend/cxx-type-decls.h} because it is
+needed when creating a new function type.
+
+@example
+typedef 
+struct parameter_info_tag
+@{
+    char is_ellipsis;
+    struct type_tag* type_info;
+    struct type_tag* nonadjusted_type_info;
+@} parameter_info_t;
+@end example
+@tindex parameter_info_t
+@tindex parameter_info_tag
+
+@table @code
+@item is_ellipsis
+States if the parameter is an ellipsis. Note that in this case both @code{type_info} and @code{original_type} will be null.
+@item type_info
+The (adjusted) type of the parameter.
+@item nonadjusted_type_info
+The original type of the type declaration. This field can be set NULL when creating a function type.
+@end table
+
+Note that the type of the parameter should be adjusted in order to satisfy the standard for both C and C++. Array types should
+be converted into pointer types and function types to pointer to function types. The non adjusted type can be stored in
+@code{nonadjusted_type_info} field@footnote{The existence of this type adjustment means that two function types can be equivalent
+but be represented by different types.}.
+
+@node Vector types
+@section Vector types
+@cindex vector types
+
+Vector types are a common extension in many compilers, like GCC, they are a
+type used in machines with SIMD@footnote{Single Instruction Multiple Data}
+machines like SSE in x86 and VMX/Altivec in PowerPC. They are represented
+in @code{vector_info_t}.
+
+@example
+typedef struct vector_tag
+@{
+    unsigned int vector_size;
+    struct type_tag* element_type;
+@} vector_info_t;
+@end example
+@tindex vector_tag
+@tindex vector_info_t
+
+@table @code
+@item vector_size
+This is the size in bytes of the whole vector. So for a machine with support of vectors of 128 bits this will be 16.
+@item element_type
+The type of the elements of the vector.
+@end table
+
+@node Unresolved function reference types
+@section Unresolved function reference types
+@cindex unresolved function references
+
+Unresolved function reference types (@code{TK_OVERLOAD}) are only used in the
+context of expression type checking. They synthesize in one type a set of
+symbols that are candidates of overload resolution.
+
+@node Ellipsis type
+@section Ellipsis type
+@cindex ellipsis type
+
+Ellipsis type (@code{TK_ELLIPSIS}) is a singleton type@footnote{Only one
+instance of it will exist} that represents an ellipsis type. It is only used in
+the context of overload resolution.
+
+@node Computed builtin function types
+@section Computed builtin function types
+@cindex computed builtin function types
+
+Sometimes it is useful to have some sort of limited overloading support in C. To achieve this, 
+since the overloading C++ machinery is disabled when compiling C, mcxx allows creating a special
+kind of type where a function defines the exact functional type. 
+
+This kind of types are not supported in C++, because such builtins would cause
+undesirable interferences to the already complex overload machinery.
+
+@node Symbols
+@chapter Symbols
+@cindex symbols
+
+@menu
+* Symbol definition::
+* Types and symbols::
+* Templates::
+@end menu
+
+The source code not only defines types but also symbolic names, symbols, that
+link a name in the program with some piece of information. These symbols
+represent the entities of the program like functions, variables, templates, etc.
+
+@node Symbol definition
+@section Symbol definition
+@cindex symbol definition
+
+@menu
+* Entity specifiers::
+@end menu
+
+A symbol is represented with the type @code{scope_entry_t}. It is declared in 
+@file{frontend/cxx-scope-decls.h}. Rarely a value is used for symbols, since they
+can be shared among places, so symbols are used by means of pointers.
+
+@example
+typedef 
+struct scope_entry_tag
+@{
+    // Kind of this symbol
+    enum cxx_symbol_kind kind;
+    
+    // Decl context when the symbol was declared
+    // it contains the scope where the symbol was
+    // declared
+    decl_context_t decl_context;
+
+    // The symbol name
+    const char* symbol_name;
+
+    // This allows us to enforce the
+    // one-definition-rule within a translation
+    // unit
+    int defined;
+
+    // Type information of this symbol
+    struct type_tag* type_information;
+
+    // Related decl_context of a namespace. This
+    // is the declarative region created by a
+    // namespace
+    decl_context_t namespace_decl_context;
+    
+    // Initializations of several kind are saved here
+    //  - initialization of const objects
+    //  - enumerator values
+    struct AST_tag* expression_value;
+
+    // File and line where this simbol was signed up
+    const char *file;
+    int line;
+
+    // Do not print this symbol (because of
+    // recursion, hiding, etc) Used specially for
+    // the injected class-name, where printing it
+    // in print scope routines would create an
+    // infinite recursion.
+    char do_not_print;
+
+    // All entity specifiers are in this structure
+    entity_specifiers_t entity_specs;
+
+    // Point in the struct AST_tag* where this was
+    // declared. This is approximate, just to find
+    // the simple_declaration, member_declaration
+    // or function_definition holding this one
+    struct AST_tag* point_of_declaration;
+
+    // Dependency info. It states if this symbol
+    // has a template-dependent nature A value of
+    // DI_UNKNOWN means this has not been already
+    // computed
+    //
+    // At the moment, this is used only for
+    // variables and enumerators.  It is intended
+    // to avoid an infinite recursion when
+    // computing whether an enum or enumerator is
+    // dependent.  An enum will check every of its
+    // enumerators, and an enumerator will check
+    // its enum type
+    dependency_info_t dependency_info;
+
+    // Extensible information of a symbol
+    extensible_struct_t* extended_data;
+@} scope_entry_t;
+@end example
+@tindex scope_entry_t
+@tindex scope_entry_tag
+
+@table @code
+@item kind
+This is the kind of the symbol. Can be one of the following
+
+@table @code
+@item SK_CLASS
+This symbol names a class. This is a @emph{class-name}.
+@item SK_ENUM
+This symbol names an enum. This is an @emph{enum-name}.
+@item SK_ENUMERATOR
+This symbol names an enumerator. This is an @emph{enumerator-name}.
+@item SK_FUNCTION
+This symbol is a function.
+@item SK_LABEL
+This symbol names a label.
+@item SK_NAMESPACE
+This symbol names a namespace. This is a @emph{namespace-name}.
+@item SK_VARIABLE
+This symbol names an object declared in the program.
+@item SK_TYPEDEF
+This symbol names a typedef. This is a @emph{typedef-name}.
+@item SK_TEMPLATE
+This symbol names a template. This is a @emph{template-name}.
+@item SK_TEMPLATE_PARAMETER
+This symbol is a nontype template parameter.
+@item SK_TEMPLATE_TYPE_PARAMETER
+This symbol is a type template parameter.
+@item SK_TEMPLATE_TEMPLATE_PARAMETER
+This symbol is a template template parameter.
+@item SK_GCC_BUILTIN_TYPE
+This symbol is a GCC builtin type like @code{__builtin_va_list}.
+@item SK_DEPENDENT_ENTITY 
+This symbol, once computed, has been found to be a dependent entity, like
+@code{A<_T>::k} below. Nothing is known about it.
+@example
+template <typename _T>
+struct A @{ @};
+
+template <typename _T>
+void f()
+@{
+  A<_T>::k = 3;
+@}
+@end example
+@end table
+@item decl_context
+The context (@pxref{Scopes and contexts}) where this symbol was actually created.
+@item symbol_name
+The unqualified name of the symbol. 
+
+Some symbols have special or crafted names. Destructors have their name
+prepended a tilde (~) and conversion functions always have the name
+@code{$.operator}. Operators have their name canonicalized in form @code{operator }@i{op}.
+Constructors have name @code{constructor }@i{class-name} (even if the class they belong
+is a template class).
+
+@item defined
+States if the symbol has been defined. It is more useful for debugging than for anything
+useful since the compiler does not normally enforce the One Definition Rule in C++.
+
+@item type_information
+The type of this symbol if applicable. See @ref{Types and symbols} and @ref{Type system}.
+
+@item namespace_decl_context
+If @code{kind} is @code{SK_NAMESPACE} then this is the context created by the namespace itself.
+
+@item expression_value
+
+For variables (@code{SK_VARIABLE}) explicitly initialized (either with @code{= expr} or using an
+initializer of the constructor, the latter only in C++), the initializing
+expression is saved here. Parameter types with default arguments in C++ are also save their default
+argument expression here.
+
+Enumerators (@code{SK_ENUMERATOR}) with explicitly given enumeration values also have the
+expression saved here.
+
+@item file
+@itemx line
+These two fields give the coordinates of the symbol when it was first declared. For implicitly specialized template
+types this will be the (possibly approximate) point where the template specialization was created.
+
+@item do_not_print
+
+This is used for scope printing routines. This flag tells these routines to skip this symbol when
+printing scopes. This is needed for builtin symbols, that would add too much noise to the output,
+and for the injected @emph{class-name} that would trigger an infinite recursion when printing
+the members of a class.
+
+@item entity_specs
+@xref{Entity specifiers}.
+
+@item point_of_declaration
+This is the whole declaration that contains the declaration of this symbol.
+
+@item dependency_info
+This field, computed in a lazy manner, can have one of the following values
+
+@table @code
+@item DI_UNKNOWN
+Dependency information has not been computed for this type.
+@item DI_NOT_DEPENDENT
+Symbol has been found not dependent.
+@item DI_DEPENDENT
+Symbol has been found dependent.
+@item DI_BUSY
+Symbol is being computed its dependency. Some entities require a recursive check that might involve
+rechecking themselves. For instance,
+
+@example
+template <int _N>
+struct A
+@{
+  enum E @{ E_1 = _N, E_2 @};
+@};
+@end example
+
+In order to check whether @code{E_2} is a dependent expression by itself, we have to check whether
+its related enum, @code{E}, is a dependent type. To check whether an enum is dependent we have
+to check every enumerator and, of course, this includes @code{E_2} so to cut the infinite recursion
+@code{E_2} is temporarily set to @code{DI_BUSY} till we realize that @code{E_1} is dependent, then 
+the whole enum @code{E} is dependent and then @code{E_2} is dependent too@footnote{Well, maybe this is not the
+best algorithm but I think it achieve its goal.}.
+@end table
+
+@end table
+
+@node Entity specifiers
+@subsection Entity specifiers
+@cindex entity specifiers
+
+Besides important information like the type, symbols have lots of specifiers that modify their exact nature.
+Since we do not want to clutter type @code{scope_entry_list_t} too much, many of these specifiers are stored
+in an @code{entity_specifiers_t}.
+
+@example
+typedef struct entity_specifiers_tag
+@{
+    char is_static;
+
+    char is_register;
+
+    char is_extern;
+
+    char is_mutable;
+
+    char is_export;
+
+    char is_inline;
+
+    char is_virtual;
+
+    char is_pure;
+
+    char is_public;
+    char is_private;
+    char is_protected;
+
+    char is_builtin;
+
+    char is_conversion;
+
+    char is_constructor;
+    char is_conversor_constructor;
+
+    char is_explicit;
+    
+    char is_template_parameter;
+    int template_parameter_nesting;
+    int template_parameter_position;
+
+    char is_parameter;
+    int parameter_position;
+    
+    char is_member;
+    struct type_tag* class_type;
+
+    char is_injected_class_name;
+    struct scope_entry_tag* injected_class_referred_symbol;
+    
+    const char* linkage_spec;
+    
+    int num_exceptions;
+    struct type_tag** exceptions;
+
+    int num_parameters;
+    default_argument_info_t **default_argument_info;
+
+    char is_bitfield;
+    struct AST_tag* bitfield_expr;
+    decl_context_t bitfield_expr_context;
+
+    char after_typedef;
+@} entity_specifiers_t;
+@end example
+@tindex entity_specifiers_t
+@tindex entity_specifiers_tag
+
+@table @code
+@item is_static
+This flag holds whether the symbol has been given the specifier @code{static}. Note that @code{static}
+specifier is rather overloaded in C and C++ meaning several different things depending on the exact
+context where it is used.
+@item is_register
+Holds whether the variable has been declared with @code{register} specifier.
+@item is_extern
+Holds whether the declaration has been declared with @code{extern}. Note that this flag is not enabled
+for global variables or functions where no @code{extern} has been given.
+@item is_mutable
+For nonstatic data members, this means that the field has been marked as @code{mutable}.
+@item is_export
+For templates, it states whether the template is @code{export} or not. The compiler, as many others, does not
+honour this flag at all.
+@item is_inline
+The specifier @code{inline} was given in the declaration of the function.
+@item is_virtual
+The nonstatic member function has been flagged as @code{virtual}.
+@item is_pure
+The nonstatic member virtual function has been flagged, by means of @code{= 0} syntax, as a pure virtual function.
+@item is_public
+@itemx is_private
+@itemx is_protected
+These flags are not honoured by the compiler, they should contain the exact access specification for this member entity.
+@item is_builtin
+States that the symbol is actually an internal builtin type. This flag is enabled both for builtin types like @code{__builtin_memcpy}
+and for (temporary) builtins created during overload resolution.
+@item is_conversion
+States that the function is a conversion function.
+@item is_constructor
+States that the function is a constructor.
+@item is_conversor_constructor
+States that the function is a conversor constructor. 
+@item is_explicit
+States that the constructor has been flagged as being @code{explicit}.
+@item is_template_parameter
+@itemx template_parameter_nesting
+@itemx template_parameter_position
+Template parameters cannot be compared by name. Position plus the nesting inside the template declaration is
+used as an identifier to figure out that two different named template parameters in fact are the same.
+
+In the example below, the compiler must realize that @code{_T} and @code{_Q} are exactly the same template parameter
+even if their names do not match.
+
+@example
+template <typename _T>
+struct A @{ void f(_T); @};
+
+template <typename _Q>
+void A<_Q>::f(_Q) @{ @};
+@end example
+
+@item is_parameter
+@itemx parameter_position
+States whether this symbol is actually a parameter. Field @code{parameter_position} contains its
+position.
+
+@item is_member
+@itemx class_type
+States whether the symbol is a member. If it is, @code{class_type} contains its (possibly named) class type.
+
+@item is_injected_class_name
+@itemx injected_class_referred_symbol
+States whether this is a placeholder symbol for the @emph{injected class-name}. Field @code{injected_class_referred_symbol}
+contains a pointer to the true class symbol.
+
+@item linkage_spec
+This is a string representing the actual linkage specifier of this symbol. The compiler does not honour this field.
+
+@item num_exceptions
+@itemx exceptions
+For a function, this is a list of exceptions declared to be throwable by the function.
+
+@item num_parameters
+For a function, this is the number of parameters of the function.
+@item default_argument_info
+Is an array with @code{num_parameters} elements. Elements are non-null if for that parameter a default argument was given.
+Correct code will hold that the first non-null element implies the remaining elements to be non-null as well.
+
+@item is_bitfield
+@itemx bitfield_expr
+@itemx bitfield_expr_context
+States whether the symbol is a bitfield. Field @code{bitfield_expr} contains
+the expression of the bitfield width and its context is found in @code{bitfield_expr_context}.
+
+@item after_typedef
+For a symbol of kind @code{SK_CLASS}, this field is @code{1} only if the symbol was created because
+it is the name of an unnamed class, like the following example.
+
+@example
+typedef struct 
+@{ 
+  int a; 
+@} A;
+typedef struct 
+@{ 
+  float b; 
+@} B, C;
+struct D 
+@{ 
+  char c; 
+@};
+@end example
+@end table
+
+Both @code{A} and @code{B} will be symbols of kind @code{SK_CLASS} but they
+would be indistinguishable in C++ from the symbol @code{D} of kind
+@code{SK_CLASS}, as well. This field allows such distinction when is 
+needed. Symbol @code{C} is a @code{SK_TYPEDEF} because now the defined
+type is named, so it is an alias for the type of @code{B}.
+
+Note that in C, above example would have created symbols @code{A} and
+@code{B} of kind @code{SK_CLASS}, @code{C} of kind @code{SK_TYPEDEF} 
+and @code{struct D} (instead of plain @code{D}) of kind @code{SK_CLASS}.
+
+@node Types and symbols
+@section Types and symbols
+@cindex types and symbols
+
+Although the compiler does not enforce this, some symbol kinds expected to be used only with
+some specific types.
+
+@multitable @columnfractions .50 .50
+@headitem Class kind @tab Valid types
+@item @code{SK_CLASS} @tab Class type. @xref{Class types}. 
+@item @code{SK_ENUM} @tab Enum type. @xref{Enum types}.
+@item @code{SK_ENUMERATOR} @tab Their related enum type. @xref{Enum types}.
+@item @code{SK_FUNCTION} @tab Function type. @xref{Function types}.
+@item @code{SK_LABEL} @tab No type
+@item @code{SK_NAMESPACE} @tab No type
+@item @code{SK_VARIABLE} @tab Any valid type, except template types.
+@item @code{SK_TYPEDEF} @tab Any valid type, except template types.
+@item @code{SK_TEMPLATE} @tab A template type.
+@item @code{SK_TEMPLATE_PARAMETER} @tab No type
+@item @code{SK_TEMPLATE_TYPE_PARAMETER } @tab A valid type for a nontemplate parameter: @code{int} or a pointer type.
+@item @code{SK_TEMPLATE_TEMPLATE_PARAMETER} @tab No type
+@item @code{SK_GCC_BUILTIN_TYPE} @tab A @code{STK_BUILTIN_TYPE}.
+@item @code{SK_DEPENDENT_ENTITY} @tab No type
+@end multitable
+
+@node Templates
+@section Templates
+@cindex templates
+
+Templates are one of the most interesting and difficult to soundly implement in 
+C++@footnote{Our implementation can be largely improved.}. We need to represent templates,
+their specializations and to be able to instantiate them as needed.
+
+@menu
+* Template parameters::
+* Template arguments::
+* Template representation::
+* Template nature::
+@end menu
+
+@node Template parameters
+@subsection Template parameters
+@cindex template parameters
+
+The first important element of any given template, either class or function,
+are template parameters.  Template parameters are in the heading part of any
+@emph{template-declaration}. There can be no template parameters for explicit
+specializations.
+
+@example
+template <typename _T>
+struct B @{ @};
+@end example
+
+Template parameters are linked to the template entity, @code{A}, in this example
+and does not have anything to do on any of its specializations.
+
+Template parameters can be type template parameters, nontype template
+parameters and template template parameters. They are represented with symbols
+@code{SK_TEMPLATE_TYPE_PARAMETER}, @code{SK_TEMPLATE_PARAMETER} [sic] and
+@code{SK_TEMPLATE_TEMPLATE_PARAMETER}, respectively. These entities do not have
+type, and when they are not given name a fake name one is computed for them
+(after all they cannot be referenced if no name is given). 
+
+The only way to identify that two template parameters are the same is checking
+that they match in their kind (type, nontype or template) and their position
+and nesting match as well. See the example for fields
+@code{is_template_parameter}, @code{template_parameter_nesting} and
+@code{template_parameter_position} in @ref{Entity specifiers}.
+
+@node Template arguments
+@subsection Template arguments
+@cindex template arguments
+
+While template parameters are actually related to the template entity itself, template
+arguments are related to all possible specializations of the template.
+
+Every template, when first declared, defines at least one basic (or primary) specialization
+where parameters and arguments are completely nonspecialized.
+
+@example
+template <typename _T, 
+          int _N, 
+          template <typename> class _V>
+struct A @{ @};
+@end example
+
+This declares a (primary) specialization where none of the template arguments has been
+specialized at all. This is like saying
+
+@example
+/* Invalid code
+
+  template <typename _T, 
+            int _N, 
+            template <typename> class _V>
+  struct A<_T, _N, _V> @{ @}; 
+*/
+@end example
+
+but this is not allowed, since it is redundant. But the underlying idea is the same. We have defined
+a template where none of its arguments require a @emph{special form}.
+
+Class templates allow partial specializations, so we can force the template
+arguments to have a specific @emph{form} by means of their type, expression or
+template name (depending on the kind of the template parameter). An extreme
+case of a specialization are explicit specializations, like the one below,
+where all template arguments are completely defined and do not have any
+freedom degree.
+
+@example
+template <>
+struct A<int, 3, B> @{ @}; // template-name 'B' above
+@end example
+
+Partial specializations allow to give some degree by relaxing the
+template argument form.
+
+@example
+template <typename _Q, int _M>
+struct A<_Q[_M], 3, B>;
+@end example
+
+Note that @code{_Q[_M]} describes a type @emph{array @code{_M} of @code{_Q}}.
+So this specialization will be only matched by those templates that as first
+template argument have as a type an array type of any size and any element
+type, remaining template arguments must be @code{3} and the template-name
+@code{B}. Like in this example,
+
+@example
+A<float[12], 3, B> c;
+@end example
+
+Note that in partial specializations there are new template parameters that
+do not have anything to do with those declared in the primary specialization.
+For another example,
+
+@example
+template <template <typename> class _W, typename _F>
+struct A <_W<_F>, 3, B> @{ @};
+@end example
+
+@node Template representation
+@subsection Template representation
+@cindex template representation
+
+When the compiler finds a template declaration it signs in a @emph{template-name},
+this is, a symbol with kind @code{SK_TEMPLATE}. In its template type, it
+registers first the primary specialized template. Additional specializations
+can be signed later by means of partial specializations, explicit specializations
+or implicit specializations caused by semantic analysis.
+
+For instance, consider
+
+@example
+template <typename _T> // (1)
+struct A @{ @};
+
+template <typename _T> // (2)
+struct A<_T*> @{ typedef _T T; @};
+
+template <> // (3)
+struct A<float> @{ @};
+
+void f(A<int*> a); // (4)
+
+A<int*>::T k; // (5)
+@end example
+
+Declaration @code{(1)} will cause the creation of a symbol @code{A} with kind
+@code{SK_TEMPLATE} in the current scope. It has only one type template
+parameter as its template signature. Its primary specialization (@pxref{Direct types}) will be
+constructed by using the class definition. Note that this primary specialization
+is a complete but dependent template specialized class type. @xref{Template nature}.
+
+Declaration @code{(2)} will cause a new specialization be added to the template
+type of @code{A}. This is also a complete but dependent template specialized
+class type.
+
+Declaration @code{(3)} will cause, again, that a new specialization be added
+to the template type of @code{A}. This time is a complete independent template
+(since there is not any template parameter enclosing this declaration).
+
+Declaration @code{(4)} will sign in function @code{f}, but one of its parameters
+is an implicit specialization of the template @code{A}. In this case, since the
+specialization has not been referred previously, it will be added in the 
+list of specializations of @code{A}. This is an incomplete independent template.
+
+Declaration @code{(5)} will require an instantiation of @code{A<int*>}. Recall
+that declaration @code{(4)} already created such specialization, so it will not
+be created again but instantiated. Instantiation will convert @code{A<int*>}
+into a complete independent template. Instantiation will choose the
+partial template specialization declared in @code{(2)}, so @code{T} is a valid
+member typename of @code{A<int*>}.
+
+@node Template nature
+@subsection Template nature
+@cindex template nature
+
+The example in @ref{Template representation} already shown that, for template classes (at the moment, but it could
+be extended to template functions too) there are four template natures@footnote{This is a rather bad name, maybe template
+specialization status would be better.} represented in the field @code{template_nature}
+of @code{simple_type_t}. @xref{Direct types}.
+
+Complete means that the template specialization type has been defined, either
+by an explicit or partial specialization or either by an instantiation.
+Independent means that the type can be described without using any template
+parameter. 
+
+Complete, dependent or independent, template specialized class types are eligible
+for instantiation of incomplete independent template specialized class type. Complete
+independent template specialized class types are already ``instantiated'' in the code.
+
+@table @code
+@item TPN_COMPLETE_DEPENDENT
+The specialization class type has been defined. For instance
+
+@example
+template <typename _T>
+struct A @{ @}; // Complete dependent
+
+template <typename _T> 
+struct A<_T*> @{ typedef _T T; @}; // Complete dependent
+@end example
+
+@item TPN_COMPLETE_INDEPENDENT
+The specialization is an explicit specialization or has been made
+complete because of instantiation.
+
+@example
+template <typename _T> 
+struct A // Complete dependent
+@{ 
+  typedef _T T; 
+@}; 
+
+template <> 
+struct A<int> // Complete independent
+@{ 
+@}; 
+
+A<float>::T k; 
+// 'A<float>' will be complete independent after instantiation
+@end example
+
+@item TPN_INCOMPLETE_DEPENDENT
+This specialization has not been defined, just declared or named. Some spurious incomplete
+dependent can appear because of templated types but they are harmless because
+incomplete types do not play any role in instantiation.
+
+@example
+template <typename _T>
+struct A; // Incomplete dependent
+
+template <typename _T>
+void f(A<_T*>); 
+// A new specialization 'A<_T*>' will be created
+// to represent the type of the first parameter
+// and it will be incomplete dependent
+@end example
+
+@item TPN_INCOMPLETE_INDEPENDENT
+This specialization is independent but has not been defined, just declared or named. Many
+spurious incomplete types can appear but they do not play any role in instantiation, except
+for the fact that they can be instantiated if needed.
+
+@example
+template <typename _T>
+struct A; // Incomplete dependent
+
+template <>
+struct A<int>; // Incomplete independent
+
+void f(A<int*>); 
+// A new specialization 'A<_T*>' will be created
+// to represent the type of the first parameter
+// and it will be incomplete independent
+@end example
+
+
+@end table
+
+@node Scopes and contexts
+@chapter Scopes and contexts
+@cindex scopes
+@cindex contexts
+
+@menu
+* Scopes::
+* Contexts::
+* Scope link::
+@end menu
+
+Scopes are the places where the compiler registers symbols. Contexts define the
+set of available scopes that determine which names can actually be used in a
+given place.
+
+@node Scopes
+@section Scopes
+@cindex scopes
+
+@menu
+* Relationships between scopes::
+@end menu
+
+In mcxx a scope is just a symbol table where symbols can be signed in. Scopes in mcxx
+allow overloading of names. This is only effectively used in C++. Scopes are
+represented by @code{scope_t} type declared in @file{cxx-scope-decls.h}.
+
+@example
+typedef 
+struct scope_tag
+@{
+    enum scope_kind kind;
+
+    Hash* hash;
+
+    const char* qualification_name;
+
+    struct scope_tag* contained_in; 
+
+    int num_used_namespaces;
+    struct scope_tag** use_namespace;
+
+    struct type_tag* class_type;
+
+    struct scope_entry_tag* function_entry;
+@} scope_t;
+@end example
+@tindex scope_tag
+@tindex scope_t
+
+@table @code
+@item kind
+This is the kind of the scope. Although all scopes are created equal, their kind
+shows the intent of their existence. This field can have the following values
+@table @code
+@item NAMESPACE_SCOPE
+This is the scope for @emph{file-scope} (in C) and for
+@emph{namespace-scope} (in C++), this includes the @emph{global scope}.
+@item FUNCTION_SCOPE
+This the scope for label identifiers both for C and C++.
+@item PROTOTYPE_SCOPE
+This is the scope where parameter identifiers are signed in in function
+declarations, both in C and C++.
+@item BLOCK_SCOPE
+This is the scope of statements both in C and C++.
+@item CLASS_SCOPE
+This is the scope created by a class definition in C++.
+@item TEMPLATE_SCOPE
+This is a scope where all template parameter names of a given template declaration nest
+are signed in. Only for C++. There is one template scope for every non empty template header
+seen during a template declaration.
+@end table
+@item hash
+This is the hashmap storing all the symbols (@code{scope_entry_list_t}). @xref{Symbols}.
+@item qualification_name
+For C++ only, this is the basic qualification name of this scope. For scopes
+of kind @code{NAMESPACE_SCOPE} this is the unqualified name of the related namespace
+(unless it is the global scope, where this will be null). For scopes
+of kind @code{CLASS_SCOPE} this is the unqualified name of the class. If the class
+is a template specialized class, it will only include the template-name (not its
+specialization template arguments).
+
+All other kinds of scopes have this field set to null.
+@item contained_in
+The logically enclosing scope. @xref{Relationships between scopes}.
+
+@item  num_used_namespaces
+@itemx use_namespace
+The @emph{used} namespaces by means of @code{using namespace} directives.
+
+@item class_type
+In scopes with kind of @code{CLASS_SCOPE} the class type after this scope was
+created.
+@item function_entry
+In scopes with kind of @code{FUNCTION_SCOPE} the function symbol after this
+scope was created.
+@end table
+
+@node Relationships between scopes
+@subsection Relationships between scopes
+@cindex scope relationships
+
+Scopes show in structured languages an obvious nesting relationship. To
+represent this basic relationship the field @code{contained_in} of
+@code{scope_t} is used. Although, this field is somewhat overloaded. Scopes of
+kind @code{FUNCTION_SCOPE} are never nested into any other scope. All
+other scopes can be nested but the meaning depends on the scope.
+
+All scopes except for @code{TEMPLATE_SCOPE}, the lexically enclosing @emph{data
+environment}@footnote{Data environment is used here instead of `scope' or
+`context'.} in the code is their @code{contained_in} scope.
+
+@example
+int a;
+
+void f(int b);
+void g(int c)
+@{
+  int d;
+  @{
+    int e;
+  @}
+  @{
+    int h;
+  @}
+@}
+@end example
+
+Symbol of variable @code{a} is signed in a @code{NAMESPACE_SCOPE}, let us call it @code{scope:global}.
+It does not have any enclosing scope since it is the global scope. 
+
+Symbol of function @code{f} is signed also in @code{scope:global}. Since it is a function declaration
+its parameter are signed in a @code{PROTOTYPE_SCOPE}, let us call it @code{scope:proto:f:1}, so
+@code{b} will be signed in @code{PROTOTYPE_SCOPE}. The enclosing scope of @code{scope:proto:f:1} is
+@code{scope:global}.
+
+For the function definition of @code{g}, the symbol @code{g} itself will be
+signed in @code{scope:global}.  Since it is a function definition it does not
+have a prototype scope but directly a block scope where all parameters and its
+outermost compound statement declarations are signed in. Let us call it
+@code{scope:block:f:0}. Symbols @code{c} and @code{d} are signed in @code{scope:block:f:0}.
+The enclosing scope of @code{scope:block:f} is @code{scope:global}.
+
+Every compound statement, and some other constructs like @code{if}, @code{for} and @code{while} (in C++ and
+some of them in C99 too), define their own block scope. Thus, symbol @code{e} within function @code{g}
+will be declared in a scope @code{scope:block:f:0:0} and symbol @code{h} in a scope @code{scope:block:h:0:1}.
+Both scopes will have @code{scope:block:f:0} as their enclosing scope@footnote{Unintentionally, this explanation devises
+a form to internally name scopes in a plain global symbol table}.
+
+Template scopes, those with kind @code{TEMPLATE_SCOPE}, are used in contexts (@pxref{Contexts})
+as side scopes that keep their own template scope hierarchy. An enclosing scope of a template scope
+if any, is always another template scope.
+
+@example
+template <typename _T>
+/* (1) */
+struct A
+@{
+  template <typename _Q>
+  /* (2) */
+  void f(_T, _Q);
+@};
+@end example
+
+In @code{(1)} a template scope is created to register @code{_T}. It does not have any other
+enclosing template scope. In @code{(2)} another template scope is created to register @code{_Q}.
+Its enclosing template scope is the one that we created to keep @code{_T}.
+
+@node Contexts
+@section Contexts
+@cindex contexts
+
+@menu
+* Context definition::
+@end menu
+
+Contexts synthesize a set of scopes that are relevant in a given region of code. If we were
+to develop a C-only compiler the exact context would require just knowing the file scope.
+In function definitions we would need also a nesting of block scopes and a function scope. 
+In function declarations a nest of prototype scopes would be also needed. But after all, just
+simple hierarchic nests would be needed.
+
+C++ makes this more difficult since several other scopes, not only those defined naturally
+by the language structure, have to be taken into account. In addition to those scopes
+for C, we need to know which scopes are being @emph{used} (by means of @code{use namespace} directives).
+Furthermore, within a class, not only the current class scope is considered but also the bases (or parent
+classes) of the class are involved in the context.
+
+Some declarations do not declare anything in the current (natural) scope but in an enclosing scope, like
+enumerators that are declared in the first enclosing namespace scope.
+
+@node Context definition
+@subsection Context definition
+@cindex context definition
+
+@menu
+* Current scope in a context::
+* Declaration context flags::
+@end menu
+
+Contexts are represented by @code{decl_context_t}. In contrast to many other
+internal structures seen so far, this one is always used by value. Using a
+value has the benefit that it is easier to take a snapshot of the exact context
+in any given place. This is useful, for instance, when we want to evaluate a
+constant expression later or when we want to parse something in a specific
+context. This type is defined in @file{frontend/cxx-scope-decls.h}.
+
+@example
+typedef struct decl_context_tag
+@{
+    decl_flags_t decl_flags;
+    
+    struct scope_tag* namespace_scope;
+    struct scope_tag* global_scope;
+    struct scope_tag* block_scope;
+
+    struct scope_tag* template_scope;
+    struct template_parameter_list_tag *template_parameters;
+    int template_nesting;
+
+    struct scope_tag* class_scope;
+    struct scope_tag* function_scope;
+    struct scope_tag* prototype_scope;
+
+    struct scope_tag* current_scope;
+@} decl_context_t;
+@end example
+@tindex decl_context_t
+@tindex decl_context_tag
+
+@table @code
+@item decl_flags
+This is a set of declaration flags that influence the way things are looked up or signed in
+the scopes. @xref{Declaration context flags}.
+@item namespace_scope
+The innermost enclosing namespace scope in the current context. In global scope
+it is the same as @code{global_scope}.
+@item global_scope
+The global namespace scope.
+@item block_scope
+The innermost enclosing block scope. It is null in namespace scope and
+class scope.
+@item template_scope
+The innermost enclosing template scope. It is null if we are not in a template
+declaration.
+@item template_parameters
+List of template parameters of the innermost enclosing template scope.
+It is null if we are not in a template declaration.
+@item template_nesting
+The nesting level of the innermost enclosing template scope. Zero
+if we are not in a template declaration.
+@item class_scope
+The innermost enclosing class scope. It is null in namespace scope
+and in block scopes of non member functions.
+@item function_scope
+Current function scope. It is null in namespace scope and class scope.
+@item current_scope
+This is the current scope where new entities will be signed in. @xref{Current scope in a context}.
+@end table
+
+@node Current scope in a context
+@subsubsection Current scope in a context
+@cindex current scope in a context
+
+Field @code{current_scope} stores the current scope where new entities will be signed in. This field
+is updated to point one of the previous fields, except for @code{template_scope}, as long as the
+scope changes.
+
+Consider the following example
+
+@example
+// (1)
+int a; 
+
+namespace B
+@{
+    // (2)
+    int b; 
+
+    class C
+    @{
+        // (3)
+        int c;
+    @};
+
+    namespace D
+    @{
+        // (4)
+        int d;
+    @}
+@}
+@end example
+
+In @code{(1)} the context will have only one scope that will be pointed at the
+same time by @code{global_scope}, @code{namespace_scope} and
+@code{current_scope}. This makes that @code{a} gets signed in the global scope
+has it has to be. 
+
+Namespace @code{B} is also signed in global scope but it
+creates a new context, @code{(2)}, where @code{namespace_scope} points to a newly created
+namespace scope (wich its @code{contained_in} field points to the global scope).
+The @code{current_scope} of the namespace context created by @code{B} refers
+to this newly created namespace scope. Thus, @code{b} is signed in the namespace
+@code{B} (@code{B::b}).
+
+Class name @code{C} is also signed in as @code{B::C}. Since it is a class
+it creates a class scope, @code{(3)}. This time @code{current_scope} will point to a 
+newly created @code{class_scope} (which its @code{contained_in} will
+point to the scope of namespace @code{B}). Within the class, this is the
+@code{current_scope} so nonstatic member @code{c} is signed in the class
+scope of @code{C}.
+
+The same applies for @code{D} and @code{d}. The former is signed in the
+namespace of @code{B}, thus @code{B::D}. The latter is signed in the namespace
+of @code{D}, thus @code{B::D::d}.
+
+Template scopes form their own stack.
+
+@example
+template <typename _T>
+struct A
+@{
+  template <typename _Q>
+  void f(_T, _Q);
+@};
+
+template <typename _T1>
+// (1)
+template <typename _Q1>
+// (2)
+void A<_T1>::f(_T1, _Q1);
+@end example
+
+In @code{(1)}, @code{current_scope} is still the global scope but
+@code{template_scope} will contain @code{_T1}. In @code{(2)},
+@code{current_scope} of the context is still the global scope as well. Its
+@code{template_scope} will contain @code{_Q1} and the @code{contained_in} field
+of this template scope will refer to the template scope where @code{_T1} was
+signed in.
+
+@node Declaration context flags
+@subsubsection Declaration context flags
+@cindex declaration context flags
+
+Sometimes, operations with contexts and scopes must be slightly modified
+because of language requirements or implementation issues. Flags in
+contexts are used for this. 
+
+Since contexts are always passed by value, many of these flags have a transient
+life just to be useful in scope query functions and functions that create new
+symbols.
+
+These flags are bitmaps, and more than one can be enabled at the same time. They can
+take one or more of the following values.
+
+@example
+DF_TEMPLATE
+DF_CONSTRUCTOR
+DF_NO_DECLARATORS
+DF_FRIEND
+DF_EXPLICIT_SPECIALIZATION
+DF_ALLOW_REDEFINITION
+DF_UNQUALIFIED_NAME
+DF_QUALIFIED_NAME
+DF_LABEL
+DF_ONLY_CURRENT_SCOPE
+DF_DEPENDENT_TYPENAME
+DF_ELABORATED_NAME
+DF_PARAMETER_DECLARATION
+DF_NO_INJECTED_CLASS_NAME
+DF_UPDATE_TEMPLATE_ARGUMENTS
+DF_INSTANTIATING
+@end example
+
+@table @code
+@item DF_TEMPLATE
+If this is enabled, declarations are within a template declaration.
+This flag is cleared for members of a class, which in turn
+can be ``template declarated".
+@item DF_CONSTRUCTOR
+It states that the current declaration is a constructor, so no
+type-specifier is expected and a special name ``@code{constructor @r{class-name}}''
+is used when looking up in the scope
+@item DF_NO_DECLARATORS
+It states that the current declaration does not have any declarator.
+It is mainly used for elaborate-type-specifiers (which change their behaviour
+depending on having or not declarators) and templated-declarations
+@item DF_FRIEND
+It states that the declaration has a 'friend' specifier
+@item DF_EXPLICIT_SPECIALIZATION
+It states that, under the same scope as @code{DF_TEMPLATE}, the declaration
+is under a @code{template<>}
+@item DF_ALLOW_REDEFINITION
+Allows redefinition of an identifier already defined, used in compiler
+phases since they might need to redefine some symbols.
+@item DF_UNQUALIFIED_NAME
+Lookup is being performed on an unqualified name
+@item DF_QUALIFIED_NAME
+Lookup is being performed on a qualified name.
+@item DF_LABEL
+We are looking up a label
+@item DF_ONLY_CURRENT_SCOPE
+Lookup will consider only the current scope and not any other
+scope in the context.
+@item DF_DEPENDENT_TYPENAME
+Enables examining dependent types (used for dependent typenames)
+@item DF_ELABORATED_NAME
+Enables C++ weird lookup for @code{struct}s, @code{union}s and @code{enum}s. This filters
+any non type symbol that might clash the name. 
+
+@example
+struct A @{ @};
+A A; 
+// Previous declaration hid typename 'A' so
+// 'A b;' is wrong and we need to use
+// 'struct A' instead
+struct A b; 
+@end example
+
+This is only needed in C++, since in C, the class key is prepended in the
+symbol name, so what it is actually signed in is @code{struct A} and not just
+@code{A} like in C++
+
+@item DF_PARAMETER_DECLARATION 
+States that we are under parameter declaration. This avoids declaring new functions
+when the parameter type is a function type.
+@item DF_NO_INJECTED_CLASS_NAME
+States that the lookup should ignore injected class-names
+@item DF_UPDATE_TEMPLATE_ARGUMENTS = BITMAP(14),
+Updates template arguments for a given specialization, used
+only when defining an already declared template specialization
+(since we want the names be updated)
+@item DF_INSTANTIATING
+We are instantiating thus some bits of the instantiated class will be skipped.
+In particular inlined function definitions are not examined their function body.
+@end table
+
+@node Scope link
+@section Scope link
+@cindex scope link
+
+Since we are not storing the related context@footnote{In fact, this structure
+should be called context link} in the AST
+(@pxref{Abstract Syntax Tree}), just having a reference to a tree is quite
+useless because no symbolic information is available.
+
+Instead of storing the scope in a tree, doing so would carry contextual
+information that might be problematic when freely moving trees around, we
+define a scope link structure that is able, given a tree, to retrieve its scope
+by using a map.
+
+In this map all tree defining or referring contexts are stored. When a given
+tree is asked its context, a traversal towards its root is performed looking
+for a tree with a known related context.
+
+This structure is declared in @file{frontend/cxx-scopelink-decls.h} as an opaque
+type defined in @file{frontend/cxx-scopelink.c}.
+
+@example
+typedef
+struct scope_link_tag
+@{
+    Hash* h;
+    decl_context_t global_decl_context;
+@} scope_link_t;
+@end example
+@tindex scope_link_tag
+@tindex scope_link_t
+
+@table @code
+@item h
+The hash storing @code{scope_link_entry_t} entries.
+@item global_decl_context
+A global context used when no other context found in the tree.
+@end table
+
+Scope link entries only keep a context.
+
+@example
+typedef struct scope_link_entry_tag
+@{
+    decl_context_t decl_context;
+@} scope_link_entry_t;
+@end example
+@tindex scope_link_entry_tag
+@tindex scope_link_entry_t
+
+@node Extensible structures and schemas
+@chapter Extensible structures and schemas
+@cindex extensible structure and schema
+
+@menu
+* Extensible schema::
+* Extensible structure::
+* Using the extensible structure::
+@end menu
+
+All the previous structures are probably enough for a typechecking frontend but might
+turn insufficient for later compiler phases. These phases might need to synthesize more
+information and being able to extend the existing structures, e.g. a new attribute
+for symbols, makes them easier to develop.
+
+To provide this functionality an extensible structure mechanism exists in the
+compiler. Although at the time of writing this document it is only used for AST
+(@pxref{Abstract Syntax Tree}) the original idea was to add this feature to the
+most of the structures seen in previous chapters.
+
+Files implementing the extensible structure are @file{lib/extstruct.c} and
+@file{lib/extstruct.h}.
+
+@node Extensible schema
+@section Extensible schema
+@cindex extensible schema
+
+Any extensible structure has a schema, that can be extended at run-time, 
+
+@example
+typedef
+struct extensible_schema_item_tag
+@{
+    size_t size;
+    int field_order;
+@} extensible_schema_item_t;
+
+typedef
+struct extensible_schema_tag
+@{
+    Hash *hash;
+    int num_fields;
+@} extensible_schema_t;
+@end example
+@tindex extensible_schema_item_tag
+@tindex extensible_schema_item_t
+@tindex extensible_schema_tag
+@tindex extensible_schema_t
+
+Data type @code{extensible_schema_item_t} represents an item in the schema,
+represented by @code{extensible_schema_t}. A schema is a set of these items
+identified by a name. A schema item belongs to only one schema, i.e. it cannot
+be reused in several schemas.
+
+Fields of a schema item are
+
+@table @code
+@item size
+This is the size in memory of the entity represented in the extensible structure.
+@item field_order
+This is the field order within the schema. This number is set when a new 
+schema item is added to a schema.
+@end table
+
+Fields of a schema are
+
+@table @code
+@item hash
+A hash providing the map between a name and a schema item.
+@item num_fields
+The number of schema items linked to this schema.
+@end table
+
+@node Extensible structure
+@section Extensible structure
+@cindex extensible structure
+
+Once we have a schema we can define extensible structs on top of it.
+
+@example
+typedef
+struct extensible_data_item_tag
+@{
+    // Index of the field in the schema
+    int schema_index;
+
+    // The data
+    char* data;
+@} extensible_data_item_t;
+
+typedef
+struct extensible_struct_tag
+@{
+    extensible_schema_t *schema;
+
+    int num_items;
+    extensible_data_item_t *items;
+@} extensible_struct_t;
+@end example
+@tindex extensible_struct_t
+@tindex extensible_struct_tag
+@tindex extensible_data_item_t
+@tindex extensible_data_item_tag
+
+Fields of @code{extensible_struct_t} are
+
+@table @code
+@item schema
+The related schema of this extensible struct. A given schema can have several structs related to it.
+@item num_items
+@item items
+Set of data items, of type @code{extensible_data_item_t}, stored in current extensible struct.
+@end table
+
+The extensible structure contains data items, of type @code{extensible_data_item_t}, with
+the following fields
+
+@table @code
+@item schema_index
+The field index in the schema of the related extensible struct.
+@item data
+A pointer to raw data of this field.
+@end table
+
+@node Using the extensible structure
+@section Using the extensible structure
+@cindex using extensible structure
+
+To use an extensible schema just add a field to the structure that you want extensible. 
+
+@example
+struct my_struct
+@{
+  extensible_struct_t* extended_struct;
+@};
+@end example
+
+@deftypefun void extensible_schema_init (extensible_schema_t* @var{schema});
+Initializes the schema pointed by @var{schema}.
+@end deftypefun
+
+@deftypefun int extensible_schema_add_field (extensible_schema_t* @var{schema}, @
+        const char* @var{field_name}, @
+        size_t @var{field_size});
+Adds a field named @var{field_name} to the schema @var{schema} with size @var{field_size}.
+@end deftypefun
+
+@deftypefun void extensible_struct_init (extensible_struct_t* @var{extensible_struct}, @
+             extensible_schema_t* @var{schema});
+Initializes the extensible struct @var{extensible_struct} with the given schema @var{schema}.
+@end deftypefun
+
+@deftypefun void* extensible_struct_get_field_pointer (extensible_schema_t* @var{schema}, @
+        extensible_struct_t* @var{extensible_struct}, @
+        const char* @var{field_name});
+Gets a pointer to storage in the extended struct @var{extensible_struct} under the given
+schema @var{schema}. Note that @var{schema} parameter should be the @code{schema} field of
+@var{extensible_struct}.
+
+This function allocates space if this is the first time this field is requested. Otherwise
+it returns the previous allocated space.
+
+If the field @var{field_name} does not exist it returns null.
+@end deftypefun
+
+@deftypefun void* extensible_struct_get_field_pointer_lazy (extensible_schema_t* @var{schema}, @
+        extensible_struct_t* @var{extensible_struct}, @
+        const char* @var{field_name}, @
+        char* @var{is_found}); 
+
+This function is equivalent to @code{extensible_struct_get_field_pointer}
+except that it does not allocate any space. 
+
+Thus, unless a member has been given any storage using
+@code{extensible_struct_get_field_pointer}, it will return null. To distinguish
+this null from the case of an nonexistent field in the schema, @var{is_found}
+will be set to 1 when the field is found.
+
+@end deftypefun
+
+@node Library and tool support
+@chapter Library and tool support
+@cindex library support
+@cindex tool support
+
+@menu
+* tpp::
+* String pool::
+@end menu
+
+@node tpp
+@section tpp
+@cindex tpp
+
+In order to ease automatic generation of some files, a tool called
+@code{tpp} (tiny preprocessor) is used. This small preprocessor
+understands a set of marks in text files similar to those of C90.  Each
+mark must occupy a whole line.
+
+@menu
+* Conditional text inclusion::
+* Include files::
+@end menu
+
+@node Conditional text inclusion
+@subsection Conditional text inclusion
+@cindex conditional text
+
+Following marks can be used to conditionally enable or disable text
+output.
+
+@example
+/*!if name*/
+/*!ifnot name*/
+@end example
+
+For @code{if}, if flag @code{name} is enabled text will be output.
+Conversely, for @code{ifnot}, if flag @code{name} is not enabled
+text will be output.
+
+Both constructions must be paired with an @code{endif} mark otherwise
+tpp will end signaling a failure.
+
+@example
+/*!endif name*/
+@end example
+
+Flags can be defined at command line when invoking tpp using syntax
+@code{-Dname}. By default any flag starts as disabled. They can also be
+enabled, or disabled, in the text file by using following marks.
+
+@example
+/*!define name*/
+/*!undefine name*/
+@end example
+
+@node Include files
+@subsection Include files
+@cindex file inclusion
+
+Files can be included like a C preprocessor using mark
+
+@example
+/*!include file-name*/
+@end example
+
+Such directive can appear in conditional output sections, where it will
+have no effect if the section is not output.
+
+In order to find included files, @code{-Idir} option can be used at
+command line to tell tpp where files can be found.
+
+@node String pool
+@section String pool
+@cindex string pool
+
+Since lots of repeated strings can be handled by the compiler, there is
+a global pool of immutable strings. A string can be requested from this
+global pool, if it has been allocated again no new memory will be
+allocated.
+
+There is only one single entry point to this global char trie in
+@file{lib/uniquestr.h} in the function @code{uniquestr}. This function
+receives a @code{const char*} and returns another @code{const char*}.
+
+This pool of strings is implemented as a trie in file
+@file{lib/char_trie.c}.
+
+@node Installation of mcxx
+@chapter Installation of mcxx
+@cindex installation mcxx
+
+@menu
+* Building from source::
+* Generating documentation::
+@end menu
+
+@node Building from source
+@section Building from source
+@cindex building from source
+
+@menu
+* Required tools::
+* configure flags::
+@end menu
+
+By default, distribution tarballs do not require any tool except for @code{gcc}
+and @code{g++} compilers. mcxx uses a fairly standard autotools setup for
+building. 
+
+Minimal configuration of the package is as follows.
+
+@example
+$ ./configure
+$ make
+$ make install
+@end example
+
+It is likely that you want to specify @code{--prefix} and some of the flags
+described in @ref{configure flags}.
+
+@node Required tools
+@subsection Required tools
+@cindex required tools
+
+A number of tools may be required to build the compiler if you modify
+some specific parts of it.
+
+@table @strong
+@item GNU Flex 2.5.4 or 2.5.3x
+Scanner generator @code{flex} is required if file @file{cxx-lexer.l} is
+modified.
+@item GNU Bison 2.3-rofi
+A slightly modified version of parser generator tool @code{bison} is @strong{required} if you modify the
+C++ and C parsers @file{src/cxx03.y} and @file{src/c99.y}, respectively.  
+The patch against the version 2.3 of @code{bison} can be found in
+@file{scripts/bison-2.3-rofi-patch}. 
+@item GNU gperf 3.0.x
+Perfect hash generator @code{gperf} is required if you modify files
+@file{driver/cxx-configoptions.gperf}, @file{driver/cxx-fileextensions.gperf}
+and @file{driver(cxx-debugflags.gperf}.
+@item GNU Texinfo
+This tool is used to generated the document you are reading.
+@item Doxygen
+Source code documentation extraction tool @code{doxygen} is required to build
+the internal reference documentation.
+@item DejaGnu
+Testsuite driver tool. Required if you execute @code{make check} to run tests.
+@end table
+
+@code{configure} script will try to find suitable versions of these tools.
+If they are found, additional regeneration rules are enabled in makefiles,
+otherwise these rules are disabled and modifying input files will not be
+considered for rebuild. See @ref{configure flags} to see which flags
+can be used to override @code{configure} autodetection.
+
+Other source code files are created at build time but they do not
+require special tools since are shell-script based.
+
+@node configure flags
+@subsection @code{configure} flags
+@cindex configure flags
+
+@table @code
+@item --disable-tl-openmp 
+Disables generation of OpenMP TL support. This is enabled by default.
+@item --disable-tl-instrumentation
+Disables generation of Mintaka instrumentation TL support
+@item --enable-tl-acotes 
+Enables generation of ACOTES TL Support
+@item --enable-tl-nebelung
+Enables generation of Nebelung STM TL support
+@item --enable-tl-superscalar 
+Enables generation of Cell/SMP superscalar TL support
+@item --disable-file-regeneration
+Disables any file regeneration using flex, bison or gperf.
+@item --enable-flex-regeneration
+Forces flex regeneration, even if the version is not recommended or properly
+detected.
+@item --enable-bison-regeneration
+Forces bison regeneration, even if the version is not recommended or properly
+detected.
+@item --enable-gperf-regeneration
+Forces gperf regeneration, even if the version is not recommended or properly
+detected.
+@item --with-nanos4=dir
+Directory of NANOS 4 installation. This option is mandatory if OpenMP is enabled.
+@item --with-nanos4-include=dir
+Directory of NANOS 4 headers.
+@item --with-nanos4-lib=dir
+Directory of NANOS 4 libraries.
+@item --with-mintaka=dir
+Directory of Mintaka installation. This option is mandatory if instrumentation is enabled.
+@item --with-mintaka-include=dir
+Directory of Mintaka headers. 
+@item --with-mintaka-lib=dir
+Directory of Mintaka libraries. 
+@item --with-nebelung=dir
+Directory of Nebelung installation. This option is mandatory if Nebelung STM is enabled.
+@item --with-nebelung-include=dir
+Directory of Nebelung headers
+@item --with-nebelung-lib=dir
+Directory of Nebelung libraries
+@item --with-superscalar-runtime-api-version=VERSION
+Selects the version number of the Cell/SMP superscalar internal runtime API
+@end table
+
+@node Generating documentation
+@section Generating documentation
+@cindex generating documentation
+
+Directory @file{doc} contains several documentation resources of mcxx.
+
+The document you are reading can be generated in @code{info} form by typing
+@code{make} in that directory, this requires @code{texinfo} (@code{configure}
+does not check this). This info file is automatically installed along the
+compiler when you type @code{make install}.  To get a @acronym{PDF, Portable
+Document Format} version of this document just type @code{make pdf}.  
+
+To generate reference code, both in @acronym{HTML, HyperText Mark-up Language}
+and @LaTeX{} just type @code{make doxygen}, this last operation requires
+@code{doxygen} installed (@code{configure} does not check this).
+
+@node Function Index 
+@unnumbered Function Index
+
+@printindex fn
+
+@node Type Index
+@unnumbered Type Index
+
+@printindex tp
+
+@node Concept Index
+@unnumbered Concept Index
+
+@printindex cp
+
+@bye

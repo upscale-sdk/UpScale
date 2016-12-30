@@ -1,0 +1,25 @@
+From 793d8660b99f37c1a41fcbb5d59b0002813d6ebe Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 9 Jan 2013 23:03:29 +0100
+Subject: [PATCH 009/311] sched: Init idle->on_rq in init_idle()
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ kernel/sched/core.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index e8b3350..2800510 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -4745,6 +4745,7 @@ void __cpuinit init_idle(struct task_struct *idle, int cpu)
+ 	rcu_read_unlock();
+ 
+ 	rq->curr = rq->idle = idle;
++	idle->on_rq = 1;
+ #if defined(CONFIG_SMP)
+ 	idle->on_cpu = 1;
+ #endif
+-- 
+1.8.3.1
+

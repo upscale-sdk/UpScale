@@ -1,0 +1,52 @@
+From a87cfbac3da22b5deb1f04a6d8dfb2da7a42b7dc Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 9 Jan 2013 12:08:15 +0100
+Subject: [PATCH 097/311] slub: Enable irqs for __GFP_WAIT
+
+SYSTEM_RUNNING might be too late for enabling interrupts. Allocations
+with GFP_WAIT can happen before that. So use this as an indicator.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ mm/slub.c | 13 +++++--------
+ 1 file changed, 5 insertions(+), 8 deletions(-)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index f63bb78..9f4f3f5 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -1281,14 +1281,15 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
+ 	struct page *page;
+ 	struct kmem_cache_order_objects oo = s->oo;
+ 	gfp_t alloc_gfp;
++	bool enableirqs;
+ 
+ 	flags &= gfp_allowed_mask;
+ 
++	enableirqs = (flags & __GFP_WAIT) != 0;
+ #ifdef CONFIG_PREEMPT_RT_FULL
+-	if (system_state == SYSTEM_RUNNING)
+-#else
+-	if (flags & __GFP_WAIT)
++	enableirqs |= system_state == SYSTEM_RUNNING;
+ #endif
++	if (enableirqs)
+ 		local_irq_enable();
+ 
+ 	flags |= s->allocflags;
+@@ -1328,11 +1329,7 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
+ 			kmemcheck_mark_unallocated_pages(page, pages);
+ 	}
+ 
+-#ifdef CONFIG_PREEMPT_RT_FULL
+-	if (system_state == SYSTEM_RUNNING)
+-#else
+-	if (flags & __GFP_WAIT)
+-#endif
++	if (enableirqs)
+ 		local_irq_disable();
+ 	if (!page)
+ 		return NULL;
+-- 
+1.8.3.1
+

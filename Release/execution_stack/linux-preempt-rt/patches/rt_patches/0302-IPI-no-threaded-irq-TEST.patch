@@ -1,0 +1,40 @@
+From 3e8a9e79fce343faca240fad89899b1c8c9e0b54 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Tue, 14 Jun 2016 08:52:50 +0200
+Subject: [PATCH 302/311] IPI no threaded irq (TEST)
+
+---
+ arch/k1/kernel/smp.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/k1/kernel/smp.c b/arch/k1/kernel/smp.c
+index 0a92969..89f957d 100644
+--- a/arch/k1/kernel/smp.c
++++ b/arch/k1/kernel/smp.c
+@@ -70,19 +70,19 @@ void smp_percpu_configure_ipi(void)
+ {
+ 	int ret;
+ 
+-	ret = request_irq(IPI_IRQ_NUMBER0, __ipi_isr, 0, "IPI", NULL);
++	ret = request_irq(IPI_IRQ_NUMBER0, __ipi_isr, IRQF_NO_THREAD, "IPI", NULL);
+ 	if (ret)
+ 		panic("Cannot register IPI handler for RM0\n");
+ 
+-	ret = request_irq(IPI_IRQ_NUMBER1, __ipi_isr, 0, "IPI", NULL);
++	ret = request_irq(IPI_IRQ_NUMBER1, __ipi_isr, IRQF_NO_THREAD, "IPI", NULL);
+ 	if (ret)
+ 		panic("Cannot register IPI handler for RM1\n");
+ 
+-	ret = request_irq(IPI_IRQ_NUMBER2, __ipi_isr, 0, "IPI", NULL);
++	ret = request_irq(IPI_IRQ_NUMBER2, __ipi_isr, IRQF_NO_THREAD, "IPI", NULL);
+ 	if (ret)
+ 		panic("Cannot register IPI handler for RM2\n");
+ 
+-	ret = request_irq(IPI_IRQ_NUMBER3, __ipi_isr, 0, "IPI", NULL);
++	ret = request_irq(IPI_IRQ_NUMBER3, __ipi_isr, IRQF_NO_THREAD, "IPI", NULL);
+ 	if (ret)
+ 		panic("Cannot register IPI handler for RM3\n");
+ }
+-- 
+1.8.3.1
+

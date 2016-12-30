@@ -1,0 +1,54 @@
+From 6c5bd236f8d04a7f1d300fab50defaef88801359 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Sun, 5 Jun 2016 16:05:12 +0200
+Subject: [PATCH 290/311] Added call to constructor of pte when a pte is
+ allocated
+
+---
+ arch/k1/include/asm/pgalloc.h | 10 ++++++++--
+ arch/k1/include/asm/pgtable.h |  1 -
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/arch/k1/include/asm/pgalloc.h b/arch/k1/include/asm/pgalloc.h
+index c81dfd4..567e13a 100644
+--- a/arch/k1/include/asm/pgalloc.h
++++ b/arch/k1/include/asm/pgalloc.h
+@@ -16,7 +16,6 @@
+ #else
+ 
+ #include <asm/page.h>
+-#include <asm/pgtable.h>
+ #include <linux/mm.h>
+ 
+ #define SIZEOF_TYPE(x) (((x *)0) + 1)
+@@ -50,7 +49,14 @@ static inline pgd_t *pgd_alloc(struct mm_struct *mm)
+ static inline pgtable_t pte_alloc_one(struct mm_struct *mm,
+ 		unsigned long address)
+ {
+-	return alloc_page(GFP_KERNEL|__GFP_ZERO);
++	struct page *pte;
++
++	pte = alloc_page(GFP_KERNEL|__GFP_ZERO);
++
++	if (pte)
++		pgtable_page_ctor(pte);
++
++	return pte;
+ }
+ 
+ static inline pte_t *pte_alloc_one_kernel(struct mm_struct *mm,
+diff --git a/arch/k1/include/asm/pgtable.h b/arch/k1/include/asm/pgtable.h
+index fd2ba08..492c8ae 100644
+--- a/arch/k1/include/asm/pgtable.h
++++ b/arch/k1/include/asm/pgtable.h
+@@ -315,7 +315,6 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long address, pte_t *
+ #define pgd_ERROR(e) \
+ 	printk("%s:%d: bad pgd %016lx.\n", __FILE__, __LINE__, pgd_val(e))
+ 	
+-#include <asm/pgalloc.h>
+ 
+ #define __HAVE_ARCH_PTE_SPECIAL
+ 
+-- 
+1.8.3.1
+

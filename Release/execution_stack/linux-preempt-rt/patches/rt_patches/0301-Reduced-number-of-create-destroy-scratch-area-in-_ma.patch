@@ -1,0 +1,55 @@
+From a1771ed982362f4120d20f75efb8f416edd6c2a9 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Mon, 13 Jun 2016 16:08:28 +0200
+Subject: [PATCH 301/311] Reduced number of create/destroy scratch area in
+ _machine_scall_handler (TEST)
+
+---
+ arch/k1/mach-k1b/syscalls.S | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/arch/k1/mach-k1b/syscalls.S b/arch/k1/mach-k1b/syscalls.S
+index db0b83a..4bf1574 100644
+--- a/arch/k1/mach-k1b/syscalls.S
++++ b/arch/k1/mach-k1b/syscalls.S
+@@ -56,9 +56,8 @@ ENTRY(_machine_scall_handler)
+ 	add	$r12 = $r12, -16
+ 	icall	$r7
+ 	;;
+-	add	$r12 = $r12, 16       ## destroy scratch area
+-	;;
+-#	ret_from_syscall
++	#add	$r12 = $r12, 16       ## destroy scratch area
++	#;;
+ 	disable_interrupts $r7
+ 	;;
+ 	get     $r16 = $sr0
+@@ -73,10 +72,10 @@ sys_check_work_pending:
+ 	;;
+ 	cb.eqz 	$r4, sys_check_signal
+ 	;;
+-	add 	$r12 = $r12, -16
++#	add 	$r12 = $r12, -16
+ 	icall 	$r7
+ 	;;
+-	add 	$r12 = $r12, 16
++#	add 	$r12 = $r12, 16
+ 	;;
+ 	goto 	sys_check_work_pending
+ 	;;
+@@ -88,9 +87,10 @@ sys_check_signal:
+ 	copy	$r2 = $r20	## syscall return value
+ 	make 	$r7 = do_notify_resume
+ 	;;
+-	copy	$r0 = $r12
++#	copy	$r0 = $r12
++	add 	$r0 = $r12, 16
+ 	;;
+-	add 	$r12 = $r12, -16
++#	add 	$r12 = $r12, -16
+ 	icall 	$r7
+ 	;;
+ 	disable_interrupts $r8
+-- 
+1.8.3.1
+

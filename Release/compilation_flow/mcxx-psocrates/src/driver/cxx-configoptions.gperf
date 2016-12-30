@@ -1,0 +1,62 @@
+/*--------------------------------------------------------------------
+  (C) Copyright 2006-2014 Barcelona Supercomputing Center
+                          Centro Nacional de Supercomputacion
+  
+  This file is part of Mercurium C/C++ source-to-source compiler.
+  
+  See AUTHORS file in the top level directory for information 
+  regarding developers and contributors.
+  
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 3 of the License, or (at your option) any later version.
+  
+  Mercurium C/C++ source-to-source compiler is distributed in the hope
+  that it will be useful, but WITHOUT ANY WARRANTY; without even the
+  implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+  PURPOSE.  See the GNU Lesser General Public License for more
+  details.
+  
+  You should have received a copy of the GNU Lesser General Public
+  License along with Mercurium C/C++ source-to-source compiler; if
+  not, write to the Free Software Foundation, Inc., 675 Mass Ave,
+  Cambridge, MA 02139, USA.
+--------------------------------------------------------------------*/
+
+
+%{
+#include "cxx-driver.h"
+#include "cxx-configfile.h"
+#include <string.h>
+%}
+
+struct configuration_directive_t
+%%
+language, config_set_language
+options, config_set_options
+preprocessor_name, config_set_preprocessor_name
+preprocessor_options, config_set_preprocessor_options
+prescanner_options, config_set_prescanner_options
+preprocessor_uses_stdout, config_set_preprocessor_uses_stdout
+compiler_name, config_set_compiler_name
+compiler_options, config_set_compiler_options
+linker_name, config_set_linker_name
+linker_options_pre, config_set_linker_options_pre
+linker_options, config_set_linker_options
+linker_options_post, config_set_linker_options_post
+compiler_phase, config_add_compiler_phase
+codegen_phase, config_set_codegen_phase
+pragma_prefix, config_add_preprocessor_prefix
+environment, config_set_environment
+environ, config_set_environment
+fortran_arrayd-descriptor, config_set_fortran_array_descriptor
+target_options, config_set_target_options
+compiler_dto, config_set_compiler_dto
+fortran_preprocessor_name, config_set_fortran_preprocessor_name
+fortran_preprocessor_options, config_set_fortran_preprocessor_options
+target_objcopy, config_set_target_objcopy
+target_objdump, config_set_target_objdump
+target_ar, config_set_target_ar
+multibinary, config_set_multibinary
+%%

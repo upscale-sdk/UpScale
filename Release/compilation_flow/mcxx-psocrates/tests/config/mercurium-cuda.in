@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+if [ "@NANOX_ENABLED@" = "no" -o "@cuda_valid@" = no ];
+then
+
+cat <<EOF
+test_ignore=yes
+EOF
+  
+exit
+
+fi
+
+source @abs_builddir@/mercurium-libraries
+
+cat <<EOF
+MCC="@abs_top_builddir@/src/driver/plaincxx --output-dir=@abs_top_builddir@/tests --profile=mnvcc --config-dir=@abs_top_builddir@/config --verbose"
+MCXX="@abs_top_builddir@/src/driver/plaincxx --output-dir=@abs_top_builddir@/tests --profile=mnvcxx --config-dir=@abs_top_builddir@/config --verbose"
+EOF
+
+NANOX_GATE=""
+if [ "@NANOS6_ENABLED@" = "yes" ];
+then
+    NANOX_GATE="--nanox"
+fi
+
+# compile_versions="\${compile_versions} nanox_cuda"
+cat <<EOF
+test_CC_cuda_omp="\${MCC}"
+test_CXX_cuda_omp="\${MCXX}"
+
+test_CFLAGS_cuda_omp="--ompss --cuda ${NANOX_GATE}"
+test_CXXFLAGS_cuda_omp="--ompss --cuda ${NANOX_GATE}"
+EOF
+
+cat <<EOF
+test_nolink=yes
+EOF

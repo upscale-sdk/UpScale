@@ -1,0 +1,42 @@
+From e681d3aa82ecb6c960daba02978851987b4bfc45 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Mon, 13 Jun 2016 14:24:42 +0200
+Subject: [PATCH 299/311] Little optimization in int_check_preempt_count
+
+---
+ arch/k1/mach-k1b/interrupts.S | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/arch/k1/mach-k1b/interrupts.S b/arch/k1/mach-k1b/interrupts.S
+index 073aed1..cef6dda 100644
+--- a/arch/k1/mach-k1b/interrupts.S
++++ b/arch/k1/mach-k1b/interrupts.S
+@@ -87,7 +87,7 @@ int_check_preempt_count:
+ 	comp.gt $r0 = $r0, 0
+ 	;;
+ 	cb.nez  $r0, irq_exit
+-	make	$r2 = preempt_schedule_irq
++	make 	$r2 = int_preempt_loop
+ 	;;
+ 	lw      $r0 = OFFSET_ti_flags[$r16]
+ 	;;
+@@ -95,8 +95,6 @@ int_check_preempt_count:
+ 	;;
+ 	cb.eqz 	$r1, int_check_preempt_lazy
+ 	;;
+-	make 	$r2 = int_preempt_loop
+-	;;
+ 	icall 	$r2
+ 	;;
+ int_check_preempt_lazy:
+@@ -109,7 +107,6 @@ int_check_preempt_lazy:
+ 	and     $r1 = $r0, 32 ##_TIF_NEED_RESCHED_LAZY (see arch/k1/include/asm/thread_info.h)
+ 	;;
+ 	cb.eqz 	$r1, irq_exit
+-	;;
+ 	make 	$r2 = int_preempt_loop
+ 	;;
+ 	icall 	$r2
+-- 
+1.8.3.1
+

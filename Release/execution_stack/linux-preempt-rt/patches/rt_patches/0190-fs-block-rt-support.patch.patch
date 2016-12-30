@@ -1,0 +1,26 @@
+From 2c2b0a5d00a80764381d188b864ac60a8d8b37fa Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Tue, 14 Jun 2011 17:05:09 +0200
+Subject: [PATCH 190/311] fs-block-rt-support.patch
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ block/blk-core.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/blk-core.c b/block/blk-core.c
+index a890f8e..d51d9be 100644
+--- a/block/blk-core.c
++++ b/block/blk-core.c
+@@ -232,7 +232,7 @@ EXPORT_SYMBOL(blk_delay_queue);
+  **/
+ void blk_start_queue(struct request_queue *q)
+ {
+-	WARN_ON(!irqs_disabled());
++	WARN_ON_NONRT(!irqs_disabled());
+ 
+ 	queue_flag_clear(QUEUE_FLAG_STOPPED, q);
+ 	__blk_run_queue(q);
+-- 
+1.8.3.1
+

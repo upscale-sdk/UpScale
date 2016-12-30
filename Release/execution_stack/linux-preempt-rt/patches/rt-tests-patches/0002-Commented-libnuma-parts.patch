@@ -1,0 +1,89 @@
+From a09faccb2011da1f25de5835dcda0bd69eb6cfb4 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Tue, 21 Jun 2016 07:52:13 +0200
+Subject: [PATCH 2/3] Commented libnuma parts
+
+---
+ src/cyclictest/cyclictest.c | 28 ++++++++++++++++++++++++----
+ 1 file changed, 24 insertions(+), 4 deletions(-)
+
+diff --git a/src/cyclictest/cyclictest.c b/src/cyclictest/cyclictest.c
+index 1428770..9ca05fb 100644
+--- a/src/cyclictest/cyclictest.c
++++ b/src/cyclictest/cyclictest.c
+@@ -53,7 +53,7 @@
+ #define gettid() syscall(__NR_gettid)
+ #define sigev_notify_thread_id _sigev_un._tid
+ 
+-#ifdef __UCLIBC__
++#ifdef __UCLIBC__XXXXXXX
+ #define MAKE_PROCESS_CPUCLOCK(pid, clock) \
+ 	((~(clockid_t) (pid) << 3) | (clockid_t) (clock))
+ #define CPUCLOCK_SCHED          2
+@@ -81,9 +81,27 @@ int sched_setaffinity (__pid_t __pid, size_t __cpusetsize,
+ #define CPU_ZERO(cpusetp)
+ 
+ #else
++#if 0
+ extern int clock_nanosleep(clockid_t __clock_id, int __flags,
+ 			   __const struct timespec *__req,
+ 			   struct timespec *__rem);
++#else
++#define MAKE_PROCESS_CPUCLOCK(pid, clock) \
++	((~(clockid_t) (pid) << 3) | (clockid_t) (clock))
++#define CPUCLOCK_SCHED          2
++static int clock_nanosleep(clockid_t clock_id, int flags, const struct timespec *req,
++		struct timespec *rem)
++{
++	if (clock_id == CLOCK_THREAD_CPUTIME_ID)
++		return -EINVAL;
++	if (clock_id == CLOCK_PROCESS_CPUTIME_ID)
++		clock_id = MAKE_PROCESS_CPUCLOCK (0, CPUCLOCK_SCHED);
++
++	return syscall(__NR_clock_nanosleep, clock_id, flags, req, rem);
++}
++
++
++#endif
+ #endif
+ 
+ #define USEC_PER_SEC		1000000
+@@ -617,7 +635,7 @@ void *timerthread(void *param)
+ 	if (par->cpu != -1) {
+ 		CPU_ZERO(&mask);
+ 		CPU_SET(par->cpu, &mask);
+-		if(sched_setaffinity(0, sizeof(mask), &mask) == -1)
++		if(sched_setaffinity(0, sizeof(mask), &mask) != -1)
+ 			warn("Could not set CPU affinity to CPU #%d\n", par->cpu);
+ 	}
+ 
+@@ -1324,7 +1342,8 @@ int main(int argc, char **argv)
+ 	int mode;
+ 	struct thread_param **parameters;
+ 	struct thread_stat **statistics;
+-	int max_cpus = sysconf(_SC_NPROCESSORS_CONF);
++	//int max_cpus = sysconf(_SC_NPROCESSORS_CONF);
++	int max_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+ 	int i, ret = -1;
+ 	int status;
+ 
+@@ -1383,6 +1402,7 @@ int main(int argc, char **argv)
+ 			fatal("error from pthread_attr_init for thread %d: %s\n", i, strerror(status));
+ 
+ 		node = -1;
++#if 0
+ 		if (numa) {
+ 			void *stack;
+ 			void *currstk;
+@@ -1407,7 +1427,7 @@ int main(int argc, char **argv)
+ 				fatal("failed to set stack addr for thread %d to 0x%x\n",
+ 				      i, stack+stksize);
+ 		}
+-
++#endif
+ 		/* allocate the thread's parameter block  */
+ 		parameters[i] = par = threadalloc(sizeof(struct thread_param), node);
+ 		if (par == NULL)
+-- 
+1.8.3.1
+

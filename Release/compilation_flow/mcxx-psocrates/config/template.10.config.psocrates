@@ -1,0 +1,90 @@
+# OpenMP + Analysis + StaticTDG for P-socrates
+
+# I/O compiler
+[psocratescc]
+language = C
+options = --openmp
+# Andey target
+{target-mppa} options = -mcluster=ioddr -mboard=developer -mhypervisor -march=k1b -mos=rtems
+{target-mppa} preprocessor_name = k1-rtems-gcc
+{target-mppa} preprocessor_options = -E
+{target-mppa} compiler_name = k1-rtems-gcc
+{target-mppa} compiler_options =
+{target-mppa} linker_name = k1-gcc
+{target-mppa} linker_options = -L@ERIKA_ENTERPRISE_LIBS@ -lpsocoffload -lmppapower -lmppanoc -lmpparouting -lpcie_queue  -lmppaipc
+{target-mppa} preprocessor_options = -I@ERIKA_ENTERPRISE_INCLUDES@ -include libpsocoffload.h
+{target-mppa} target_objdump = k1-rtems-objdump
+{target-mppa} target_objcopy = k1-rtems-objcopy
+{target-mppa} target_ar = k1-rtems-ar
+{target-mppa} multibinary = mppa
+# Looks like 32 bit
+{target-mppa} environ = linux-i386
+
+{openmp} compiler_phase = libtlomp-base.so
+{target-mppa} compiler_phase = libtlmppa-omp-lowering.so
+{openmp} preprocessor_options = -I -D_OPENMP=200805
+codegen_phase = libcodegen-psocrates.so
+options = --variable=untied_tasks_by_default:0
+
+# Cluster compiler
+[psocratescc-cluster]
+language = C
+options = --openmp
+{target-mppa} options = -mcluster=node -mboard=developer -mhypervisor -march=k1b -mos=bare
+{target-mppa} preprocessor_name = k1-gcc
+{target-mppa} preprocessor_options = -E
+{target-mppa} compiler_name = k1-gcc
+{target-mppa} compiler_options =
+{target-mppa} linker_name = k1-gcc
+{target-mppa} linker_options =
+{target-mppa} target_options[psocratescc] = sublink embed
+{target-mppa} target_objdump = k1-elf-objdump
+{target-mppa} target_objcopy = k1-elf-objcopy
+{target-mppa} target_ar = k1-elf-ar
+{target-mppa} linker_options = -L@ERIKA_ENTERPRISE_LIBS@ -lpsocomp -lee -lvbsp -lmppaipc
+# Looks like 32 bit
+{target-mppa} environ = linux-i386
+
+{openmp} compiler_phase = libtlomp-base.so
+{openmp} preprocessor_options = -I -D_OPENMP=200805
+
+{instrument-tasks} options = --variable=instrumentation:tasks
+{instrument-all} options = --variable=instrumentation:all
+
+{tdg} options = --variable=tdg_enabled:1
+{tdg} compiler_phase = libpsocrates.so
+{taskparts} options = --variable=taskparts_enabled:1
+
+{openmp} compiler_phase = libtlgomp-omp-lowering.so
+options = --variable=untied_tasks_by_default:0
+
+{openmp} preprocessor_options = -I@PKGDATADIR@/gomp-omp -D_OPENMP=200805 -include gomp-omp.h
+linker_options = -Xlinker --enable-new-dtags
+linker_options = -L@GOMP_OMP_LIB@ -Xlinker -rpath -Xlinker @GOMP_OMP_LIB@ #-lgomp
+
+# I/O compiler for x86 hosts, used for testing
+[psocratescc-x86]
+language = C
+options = --openmp
+preprocessor_name = gcc
+preprocessor_options = -E
+compiler_name = gcc
+compiler_options =
+linker_name = gcc
+linker_options =
+
+{openmp} compiler_phase = libtlomp-base.so
+{openmp} preprocessor_options = -I -D_OPENMP=200805
+
+{instrument-tasks} options = --variable=instrumentation:tasks
+{instrument-all} options = --variable=instrumentation:all
+
+{tdg} options = --variable=tdg_enabled:1
+{tdg} compiler_phase = libpsocrates.so
+{taskparts} options = --variable=taskparts_enabled:1
+
+#codegen_phase = libcodegen-psocrates.so
+{openmp} compiler_phase = libtlgomp-omp-lowering.so
+options = --variable=untied_tasks_by_default:0
+
+{openmp} preprocessor_options = -I@PKGDATADIR@/gomp-omp -D_OPENMP=200805 -include gomp-omp.h

@@ -1,0 +1,26 @@
+/* -----------------------------------------------------------------------------
+ * Author list (in alphabetic order):
+ * 
+ *        Eduardo Quiñones <eduardo.quinones@bsc.es>
+ *        Sara Royuela <sara.royuela@bsc.es>
+ *        Roberto Vargas <roberto.vargas@bsc.es>
+ * 
+ * -----------------------------------------------------------------------------
+ * (C) Copyright 2016 Barcelona Supercomputing Center
+ * 
+ * This file is part of boxer (Compilation flow) of the P-SOCRATES project.
+ *
+ * Boxer is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published 
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * Boxer is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with boxer. If not, see <http://www.gnu.org/licenses/>.
+ * -----------------------------------------------------------------------------
+ */

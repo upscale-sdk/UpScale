@@ -1,0 +1,32 @@
+# Plain profiles
+[plaincc]
+language = C
+options =
+preprocessor_name = @GCC@
+preprocessor_options = -E
+compiler_name = @GCC@
+compiler_options =
+linker_name = @GCC@
+linker_options =
+
+[plaincxx]
+language = C++
+options =
+preprocessor_name = @G++@
+preprocessor_options = -E
+compiler_name = @G++@
+compiler_options =
+linker_name = @G++@
+linker_options =
+
+[plainfc]
+language = Fortran
+options =
+fortran_preprocessor_name = @GFORTRAN@
+fortran_preprocessor_options = -cpp -E
+compiler_name = @GFORTRAN@
+compiler_options =
+linker_name = @GFORTRAN@
+linker_options =
+
+[plainf95 : plainfc]

@@ -1,0 +1,129 @@
+From 7222436b5218c59059bf880c8a810fb5663ad454 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Sun, 12 Jun 2016 11:10:13 +0200
+Subject: [PATCH 294/311] Rewrite return from interrupt path
+
+---
+ arch/k1/mach-k1b/interrupts.S | 107 +++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 106 insertions(+), 1 deletion(-)
+
+diff --git a/arch/k1/mach-k1b/interrupts.S b/arch/k1/mach-k1b/interrupts.S
+index d4e90ee..2584b37 100644
+--- a/arch/k1/mach-k1b/interrupts.S
++++ b/arch/k1/mach-k1b/interrupts.S
+@@ -43,6 +43,111 @@ ENTRY(_machine_int_handler)
+ 	;;
+ 	## Note : $r12 contains pt_regs pointer (necessary for
+ 	## ret_from_trap_and_intr)
+-	ret_from_trap_and_intr
++	lw	$r4 = CONTEXT_sps[$r12]
++	;;
++	and     $r4 = $r4, 1 # test sps.pm
++	get 	$r16 = $sr0
++	;;
++	cb.nez  $r4, int_check_preempt_count ## from sys mode
++	;;
++int_check_work_pending:
++	lw      $r4 = OFFSET_ti_flags[$r16]
++	;;
++	and 	$r4 = $r4, 0x28 ##(_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY)
++	make 	$r7 = schedule
++	;;
++	cb.eqz 	$r4, int_check_signal
++	;;
++	add 	$r12 = $r12, -16
++	icall 	$r7
++	;;
++	add 	$r12 = $r12, 16
++	;;
++	goto 	int_check_work_pending
++	;;
++int_check_signal:
++	make 	$r1 = 0
++	;;
++	enable_interrupts $r8
++	;;
++	make 	$r7 = do_notify_resume
++	;;
++	make 	$r2 = 0
++	;;
++	copy 	$r0 = $r12
++	;;
++	add 	$r12 = $r12, -16
++	icall 	$r7
++	;;
++	add 	$r12 = $r12, 16
++	goto 	irq_exit
++	;;
++int_check_preempt_count:
++	lw      $r0 = OFFSET_ti_preempt_count[$r16]
++	;;
++	comp.gt $r0 = $r0, 0
++	;;
++	cb.nez  $r0, irq_exit
++	make	$r2 = preempt_schedule_irq
++	;;
++	lw      $r0 = OFFSET_ti_flags[$r16]
++	;;
++	and     $r1 = $r0, 8 ##_TIF_NEED_RESCHED
++	;;
++	cb.eqz 	$r1, int_check_preempt_lazy
++	;;
++	make 	$r2 = int_preempt_loop
++	;;
++	icall 	$r2
++	;;
++int_check_preempt_lazy:
++	lw      $r1 = OFFSET_ti_preempt_lazy_count[$r16]
++	;;
++	comp.gt $r1 = $r1, 0
++	;;
++	cb.nez  $r1, irq_exit
++	;;
++	and     $r1 = $r0, 32 ##_TIF_NEED_RESCHED_LAZY (see arch/k1/include/asm/thread_info.h)
++	;;
++	cb.eqz 	$r1, irq_exit
++	;;
++	make 	$r2 = int_preempt_loop
++	;;
++	icall 	$r2
++	;;
++irq_exit:
++	disable_interrupts $r8
++	;;
++	restore_context $r12
++	;;
++	add 	$r12 = $r12, SIZEOF_PT_REGS
++	;;
++	sys_restore_usp
++	;;
++	rfe
+ 	;;
+ ENDPROC(_machine_int_handler)
++
++
++ENTRY(int_preempt_loop)
++	copy 	$r15 = $ra
++	;;
++int_preempt_inner_loop:
++	make 	$r2 = preempt_schedule_irq
++	;;
++	add 	$r12 = $r12, -16
++	icall 	$r2
++	;;
++	add 	$r12 = $r12, 16
++	;;
++	lw      $r0 = OFFSET_ti_flags[$r16]
++	;;
++	and     $r0 = $r0, (8 + 32) ##_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY
++	;;
++	cb.nez 	$r1, int_preempt_inner_loop
++	;;
++	copy 	$ra = $r15
++	;;
++	ret
++	;;
++ENDPROC(int_preempt_loop)
+-- 
+1.8.3.1
+

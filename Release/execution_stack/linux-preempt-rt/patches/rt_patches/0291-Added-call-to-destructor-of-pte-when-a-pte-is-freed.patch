@@ -1,0 +1,29 @@
+From 531d02a214365e6fb04348eb7d5306327cab492a Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Mon, 6 Jun 2016 14:03:00 +0200
+Subject: [PATCH 291/311] Added call to destructor of pte when a pte is freed
+
+---
+ arch/k1/include/asm/pgalloc.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/k1/include/asm/pgalloc.h b/arch/k1/include/asm/pgalloc.h
+index 567e13a..37fbeac 100644
+--- a/arch/k1/include/asm/pgalloc.h
++++ b/arch/k1/include/asm/pgalloc.h
+@@ -75,9 +75,9 @@ static inline pte_t *pte_alloc_one_kernel(struct mm_struct *mm,
+ static inline void pte_free(struct mm_struct *mm, pgtable_t pte)
+ {
+ 	printk(KERN_INFO "%s:%s unimplemented\n", __FILE__, __FUNCTION__);
+-	BUG();
+-/*	pgtable_page_dtor(pte);
+-	__free_pages(pte, PTE_ORDER);*/
++
++	pgtable_page_dtor(pte);
++	__free_page(pte);
+ }
+ 
+ static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
+-- 
+1.8.3.1
+

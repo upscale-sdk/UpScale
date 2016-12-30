@@ -1,0 +1,71 @@
+From a8d0a71e5ed5d509262f89c88339b40cfcebc754 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Sun, 12 Jun 2016 16:14:52 +0200
+Subject: [PATCH 297/311] Rewrite return from exception path
+
+---
+ arch/k1/mach-k1b/trap_handler.S | 49 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 48 insertions(+), 1 deletion(-)
+
+diff --git a/arch/k1/mach-k1b/trap_handler.S b/arch/k1/mach-k1b/trap_handler.S
+index 571c5ed..f4656ef 100644
+--- a/arch/k1/mach-k1b/trap_handler.S
++++ b/arch/k1/mach-k1b/trap_handler.S
+@@ -110,6 +110,53 @@ trap_handler_call:
+ 	add	$r12 = $r12, 16       ## destroy scratch area
+ 	;;
+ 	# Check pending work and restore context.
+-	ret_from_trap_and_intr
++	lw	$r4 = CONTEXT_sps[$r12]
++	;;
++	and     $r4 = $r4, 1 # test sps.pm
++	get     $r16 = $sr0
++	;;
++	cb.nez  $r4, trap_exit ## from sys mode
++	;;
++trap_check_work_pending:
++	lw      $r4 = OFFSET_ti_flags[$r16]
++	;;
++	and 	$r4 = $r4, 0x28 ##(_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY)
++	make 	$r7 = schedule
++	;;
++	cb.eqz 	$r4, trap_check_signal
++	;;
++	add 	$r12 = $r12, -16
++	icall 	$r7
++	;;
++	add 	$r12 = $r12, 16
++	;;
++	goto 	trap_check_work_pending
++	;;
++trap_check_signal:
++	make 	$r1 = 0
++	;;
++	enable_interrupts $r8
++	;;
++	make 	$r7 = do_notify_resume
++	;;
++	make 	$r2 = 0
++	;;
++	copy 	$r0 = $r12
++	;;
++	add 	$r12 = $r12, -16
++	icall 	$r7
++	;;
++	add 	$r12 = $r12, 16
++	;;
++trap_exit:
++	disable_interrupts $r8
++	;;
++	restore_context $r12
++	;;
++	add 	$r12 = $r12, SIZEOF_PT_REGS
++	;;
++	sys_restore_usp
++	;;
++	rfe
+ 	;;
+ ENDPROC(_trap_handler)
+-- 
+1.8.3.1
+

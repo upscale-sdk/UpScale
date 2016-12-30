@@ -1,0 +1,62 @@
+From 8b437449831cf5c7c5dd30a2028b8e3c59fd755c Mon Sep 17 00:00:00 2001
+From: Ingo Molnar <mingo@elte.hu>
+Date: Fri, 3 Jul 2009 08:30:20 -0500
+Subject: [PATCH 108/311] timers: preempt-rt support
+
+Signed-off-by: Ingo Molnar <mingo@elte.hu>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ kernel/timer.c | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/timer.c b/kernel/timer.c
+index bc35269..aa52cdb 100644
+--- a/kernel/timer.c
++++ b/kernel/timer.c
+@@ -1356,7 +1356,17 @@ unsigned long get_next_timer_interrupt(unsigned long now)
+ 	if (cpu_is_offline(smp_processor_id()))
+ 		return expires;
+ 
++#ifdef CONFIG_PREEMPT_RT_FULL
++	/*
++	 * On PREEMPT_RT we cannot sleep here. If the trylock does not
++	 * succeed then we return the worst-case 'expires in 1 tick'
++	 * value:
++	 */
++	if (!spin_trylock(&base->lock))
++		return  now + 1;
++#else
+ 	spin_lock(&base->lock);
++#endif
+ 	if (base->active_timers) {
+ 		if (time_before_eq(base->next_timer, base->timer_jiffies))
+ 			base->next_timer = __next_timer_interrupt(base);
+@@ -1366,7 +1376,6 @@ unsigned long get_next_timer_interrupt(unsigned long now)
+ 
+ 	if (time_before_eq(expires, now))
+ 		return now;
+-
+ 	return cmp_next_hrtimer_event(now, expires);
+ }
+ #endif
+@@ -1617,7 +1626,7 @@ static void __cpuinit migrate_timers(int cpu)
+ 
+ 	BUG_ON(cpu_online(cpu));
+ 	old_base = per_cpu(tvec_bases, cpu);
+-	new_base = get_cpu_var(tvec_bases);
++	new_base = get_local_var(tvec_bases);
+ 	/*
+ 	 * The caller is globally serialized and nobody else
+ 	 * takes two locks at once, deadlock is not possible.
+@@ -1638,7 +1647,7 @@ static void __cpuinit migrate_timers(int cpu)
+ 
+ 	spin_unlock(&old_base->lock);
+ 	spin_unlock_irq(&new_base->lock);
+-	put_cpu_var(tvec_bases);
++	put_local_var(tvec_bases);
+ }
+ #endif /* CONFIG_HOTPLUG_CPU */
+ 
+-- 
+1.8.3.1
+

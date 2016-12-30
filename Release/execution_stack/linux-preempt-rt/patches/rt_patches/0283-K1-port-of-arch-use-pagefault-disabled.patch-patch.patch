@@ -1,0 +1,39 @@
+From e1b6f1e13457714b52ca43b93193c6c35f641de0 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Fri, 20 May 2016 13:58:18 +0200
+Subject: [PATCH 283/311] K1 port of arch-use-pagefault-disabled.patch patch:
+
+"Necessary for decoupling pagefault disable from preempt count."
+
+and peter_zijlstra-frob-pagefault_disable.patch patch:
+
+"Wrap the test for pagefault_disabled() into a helper, this allows us
+to remove the need for current->pagefault_disabled on !-rt kernels."
+---
+ arch/k1/mm/trap.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/k1/mm/trap.c b/arch/k1/mm/trap.c
+index 8f5534a..8f3633d 100644
+--- a/arch/k1/mm/trap.c
++++ b/arch/k1/mm/trap.c
+@@ -36,10 +36,16 @@ static void do_page_fault(struct pt_regs *regs, unsigned long code_address,
+ 	pte_t *pte = NULL;
+ 	pgprot_t prot;
+ 
++#if 0
+ 	/* If we are in the atomic context we will just check the fixup 
+ 	 * as we can't take any locks */
+ 	if (in_atomic() || !mm)
+ 		goto check_fixup;
++#else
++	/* TODO: check jump to check_fixup or no_context */
++	if(!mm || pagefault_disabled())
++		goto no_context;
++#endif
+ 
+ 	/* Prepare to take the lock. But it's not that simple as we may come
+ 	 * here with the write lock mm->mmap_sem taken by someone. To avoid
+-- 
+1.8.3.1
+

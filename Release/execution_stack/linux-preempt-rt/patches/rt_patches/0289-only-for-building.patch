@@ -1,0 +1,25 @@
+From 7fd3c6c8b4c0068b07bf80bb5dae3bae445fd245 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Thu, 2 Jun 2016 15:52:47 +0200
+Subject: [PATCH 289/311] only for building
+
+---
+ arch/k1/mm/trap.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/k1/mm/trap.c b/arch/k1/mm/trap.c
+index 8f3633d..2702ab9 100644
+--- a/arch/k1/mm/trap.c
++++ b/arch/k1/mm/trap.c
+@@ -151,7 +151,7 @@ no_context:
+ 		return;
+ 	}
+ 
+-check_fixup:
++//check_fixup:
+ 	/* Check if fixup address exists for this $ea */
+ 	{
+ 		const struct exception_table_entry *entry;
+-- 
+1.8.3.1
+

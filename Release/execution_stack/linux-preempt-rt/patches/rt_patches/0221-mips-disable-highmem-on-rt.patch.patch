@@ -1,0 +1,26 @@
+From 6d0b3b530b87c39c368a9ceb34f4ba9688197eb2 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Mon, 18 Jul 2011 17:10:12 +0200
+Subject: [PATCH 221/311] mips-disable-highmem-on-rt.patch
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ arch/mips/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/Kconfig b/arch/mips/Kconfig
+index 7a58ab9..96007d4 100644
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -2114,7 +2114,7 @@ config CPU_R4400_WORKAROUNDS
+ #
+ config HIGHMEM
+ 	bool "High Memory Support"
+-	depends on 32BIT && CPU_SUPPORTS_HIGHMEM && SYS_SUPPORTS_HIGHMEM
++	depends on 32BIT && CPU_SUPPORTS_HIGHMEM && SYS_SUPPORTS_HIGHMEM && !PREEMPT_RT_FULL
+ 
+ config CPU_SUPPORTS_HIGHMEM
+ 	bool
+-- 
+1.8.3.1
+

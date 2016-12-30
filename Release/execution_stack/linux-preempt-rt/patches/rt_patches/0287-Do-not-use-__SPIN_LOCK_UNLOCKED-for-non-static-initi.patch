@@ -1,0 +1,26 @@
+From a9089823086ba4b2c74c569111830b1201960d94 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Sun, 5 Jun 2016 14:24:27 +0200
+Subject: [PATCH 287/311] Do not use __SPIN_LOCK_UNLOCKED for non static
+ initialization on k1 uart
+
+---
+ arch/k1/platforms/uart.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/k1/platforms/uart.c b/arch/k1/platforms/uart.c
+index 0d0f817..b4b07a4 100644
+--- a/arch/k1/platforms/uart.c
++++ b/arch/k1/platforms/uart.c
+@@ -362,7 +362,7 @@ int __init mppa_uart_init(void)
+ 		goto err_uart;
+ 
+ 	up = &mppa_uart_ports[uart_rel_id];
+-	up->uart_lock = __SPIN_LOCK_UNLOCKED(&up->uart_lock);
++	spin_lock_init(&up->uart_lock);
+ 	port = &up->port;
+ 
+ 	spin_lock_init(&port->lock);
+-- 
+1.8.3.1
+

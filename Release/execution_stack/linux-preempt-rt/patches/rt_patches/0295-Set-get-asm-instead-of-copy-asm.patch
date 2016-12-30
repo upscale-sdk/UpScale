@@ -1,0 +1,34 @@
+From 8a9d21a56c807ace6a7e05186e769753cffa86aa Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Sun, 12 Jun 2016 11:20:40 +0200
+Subject: [PATCH 295/311] Set/get asm instead of copy asm
+
+---
+ arch/k1/mach-k1b/interrupts.S | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/k1/mach-k1b/interrupts.S b/arch/k1/mach-k1b/interrupts.S
+index 2584b37..aedca5c 100644
+--- a/arch/k1/mach-k1b/interrupts.S
++++ b/arch/k1/mach-k1b/interrupts.S
+@@ -130,7 +130,7 @@ ENDPROC(_machine_int_handler)
+ 
+ 
+ ENTRY(int_preempt_loop)
+-	copy 	$r15 = $ra
++	get 	$r15 = $ra
+ 	;;
+ int_preempt_inner_loop:
+ 	make 	$r2 = preempt_schedule_irq
+@@ -146,7 +146,7 @@ int_preempt_inner_loop:
+ 	;;
+ 	cb.nez 	$r1, int_preempt_inner_loop
+ 	;;
+-	copy 	$ra = $r15
++	set 	$ra = $r15
+ 	;;
+ 	ret
+ 	;;
+-- 
+1.8.3.1
+

@@ -1,0 +1,30 @@
+From 583b0499687805855798befed894f34bebad4c50 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 4 Nov 2011 20:48:36 +0100
+Subject: [PATCH 150/311] sched-clear-pf-thread-bound-on-fallback-rq.patch
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ kernel/sched/core.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index 60734f9..74feaa5 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -1245,6 +1245,12 @@ out:
+ 		}
+ 	}
+ 
++	/*
++	 * Clear PF_NO_SETAFFINITY, otherwise we wreckage
++	 * migrate_disable/enable. See optimization for
++	 * PF_NO_SETAFFINITY tasks there.
++	 */
++	p->flags &= ~PF_NO_SETAFFINITY;
+ 	return dest_cpu;
+ }
+ 
+-- 
+1.8.3.1
+

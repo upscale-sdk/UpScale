@@ -1,0 +1,25 @@
+From 4228f253e0792dbe28c55bfa9fc0700bcc9e69ab Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Tue, 6 Dec 2016 13:04:55 +0100
+Subject: [PATCH 3/3] Fixed check of sched_setaffinity return value
+
+---
+ src/cyclictest/cyclictest.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/cyclictest/cyclictest.c b/src/cyclictest/cyclictest.c
+index 9ca05fb..6b8af5f 100644
+--- a/src/cyclictest/cyclictest.c
++++ b/src/cyclictest/cyclictest.c
+@@ -635,7 +635,7 @@ void *timerthread(void *param)
+ 	if (par->cpu != -1) {
+ 		CPU_ZERO(&mask);
+ 		CPU_SET(par->cpu, &mask);
+-		if(sched_setaffinity(0, sizeof(mask), &mask) != -1)
++		if(sched_setaffinity(0, sizeof(mask), &mask) < 0)
+ 			warn("Could not set CPU affinity to CPU #%d\n", par->cpu);
+ 	}
+ 
+-- 
+1.8.3.1
+

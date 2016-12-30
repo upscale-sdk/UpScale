@@ -1,0 +1,40 @@
+From 668faa8a311b01c1e0b78d48596be62142eff931 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Thu, 16 Jun 2016 07:40:08 +0200
+Subject: [PATCH 308/311] Fixed return value of a syscall
+
+---
+ arch/k1/mach-k1b/syscalls.S | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/arch/k1/mach-k1b/syscalls.S b/arch/k1/mach-k1b/syscalls.S
+index 4bf1574..755ddfa 100644
+--- a/arch/k1/mach-k1b/syscalls.S
++++ b/arch/k1/mach-k1b/syscalls.S
+@@ -72,10 +72,8 @@ sys_check_work_pending:
+ 	;;
+ 	cb.eqz 	$r4, sys_check_signal
+ 	;;
+-#	add 	$r12 = $r12, -16
+ 	icall 	$r7
+ 	;;
+-#	add 	$r12 = $r12, 16
+ 	;;
+ 	goto 	sys_check_work_pending
+ 	;;
+@@ -87,10 +85,10 @@ sys_check_signal:
+ 	copy	$r2 = $r20	## syscall return value
+ 	make 	$r7 = do_notify_resume
+ 	;;
+-#	copy	$r0 = $r12
+ 	add 	$r0 = $r12, 16
+ 	;;
+-#	add 	$r12 = $r12, -16
++// do_notify_resume changes CONTEXT_r0 with the result of the syscall
++// if from_syscall is true (r1 <-> from_syscall)
+ 	icall 	$r7
+ 	;;
+ 	disable_interrupts $r8
+-- 
+1.8.3.1
+

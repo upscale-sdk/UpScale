@@ -1,0 +1,30 @@
+From d1fe7e7b4882ac44e5ae331a77c0e6528a925974 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Sun, 28 Oct 2012 13:26:09 +0000
+Subject: [PATCH 262/311] rcu: Disable RCU_FAST_NO_HZ on RT
+
+This uses a timer_list timer from the irq disabled guts of the idle
+code. Disable it for now to prevent wreckage.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Cc: stable-rt@vger.kernel.org
+---
+ init/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index be5d691..c0048eb 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -577,7 +577,7 @@ config RCU_FANOUT_EXACT
+ 
+ config RCU_FAST_NO_HZ
+ 	bool "Accelerate last non-dyntick-idle CPU's grace periods"
+-	depends on NO_HZ_COMMON && SMP
++	depends on NO_HZ_COMMON && SMP && !PREEMPT_RT_FULL
+ 	default n
+ 	help
+ 	  This option permits CPUs to enter dynticks-idle state even if
+-- 
+1.8.3.1
+

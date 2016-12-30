@@ -1,0 +1,32 @@
+
+- Source code structure (might be helpful)
+
+- doc/ => contains the paper that introduces the basic algorithm (that I refined and re-adapted for P-SOC)
+- Makefile => I think with your PhD in computer science you can figure out what it is
+- psoc_mapper.c => contains the main and the code for the DEALER, that actually generates P-SOCRATES-OPENMP task table to feed ETH GOMP runtime (that must be recompiled)
+- regression-tests/ => .DOT files with regression tests
+- sched.h/c => the actual implementation of global (we call it Dynamic) and partitioned (we call it Static) scheduler
+
+-- Compilation process
+
+Enter the folder, and type
+$ make clean all
+
+...done
+
+- Howto run
+
+$ ./psoc_mapper [<FLAG> ... ] <INPUT FILE> [<INPUT FILE> ... ]
+
+Notes:
+
+- Never put any <FLAG> after <INPUT FILE>s, or it won't work.
+- <INPUT FILE>s are .DOT files, annotated
+- The tool expects a "dagParams.txt" file as input, that provides Periods and Deadlines for each DAG /.DOT file. I enclosed a "always go" example dagParams.txt file, with four DAGs (0,1,2,3) whose period is the maximum possible value that I can handle (I use LONG datatype for times)
+- "-v" flags increases log verbosity. 
+- The tool produces the table that can be saved in a header (.H) file. By default, output is on stout. To redirect output on a file, use "-o <FILENAME>" flag
+- "-s" for partitioned/static scheduling, "-d" for dynamic/global scheduling. If you don't put any of them, it does not perform any schedulability analysis nor mapping, it simply generate the table. I also added a "-r" Round Robin mapping strategy on the available cores for debug/testing purpose.
+- In the generated table there is the task-part -to-cores mapping, if "-s" is specified. The ".map" field is the mapping. -1 if no mapping, or dynamic mapping is generated. You need to insert it in the runtime (generate some "<NAME>.h" file using "-o" switch, and re-compile libgomp.
+- By default it maps on 16 cores.
+- No report is currently generated ("Yes/No" to sched analysis). I can do it in 5 minutes, we will do it together.
+

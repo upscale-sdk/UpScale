@@ -1,0 +1,52 @@
+From dae5cd799329504f690b79427da423cff9fca503 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Sat, 23 Jul 2011 11:04:08 +0200
+Subject: [PATCH 002/311] early-printk-consolidate.patch
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ arch/sparc/kernel/setup_32.c | 1 +
+ arch/sparc/kernel/setup_64.c | 8 +++++++-
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/arch/sparc/kernel/setup_32.c b/arch/sparc/kernel/setup_32.c
+index 1434526..0884ccd 100644
+--- a/arch/sparc/kernel/setup_32.c
++++ b/arch/sparc/kernel/setup_32.c
+@@ -309,6 +309,7 @@ void __init setup_arch(char **cmdline_p)
+ 
+ 	boot_flags_init(*cmdline_p);
+ 
++	early_console = &prom_early_console;
+ 	register_console(&prom_early_console);
+ 
+ 	printk("ARCH: ");
+diff --git a/arch/sparc/kernel/setup_64.c b/arch/sparc/kernel/setup_64.c
+index 1378554..6482b87 100644
+--- a/arch/sparc/kernel/setup_64.c
++++ b/arch/sparc/kernel/setup_64.c
+@@ -551,6 +551,12 @@ static void __init init_sparc64_elf_hwcap(void)
+ 		pause_patch();
+ }
+ 
++static inline void register_prom_console(void)
++{
++	early_console = &prom_early_console;
++	register_console(&prom_early_console);
++}
++
+ void __init setup_arch(char **cmdline_p)
+ {
+ 	/* Initialize PROM console and command line. */
+@@ -562,7 +568,7 @@ void __init setup_arch(char **cmdline_p)
+ #ifdef CONFIG_EARLYFB
+ 	if (btext_find_display())
+ #endif
+-		register_console(&prom_early_console);
++		register_prom_console();
+ 
+ 	if (tlb_type == hypervisor)
+ 		printk("ARCH: SUN4V\n");
+-- 
+1.8.3.1
+

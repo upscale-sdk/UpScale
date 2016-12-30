@@ -1,0 +1,30 @@
+From ef2037b14cc90edb624d8322e8a1083969a33695 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Thu, 19 May 2016 08:23:41 +0200
+Subject: [PATCH 217/311] Powerpc: Use generic rwsem on RT
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ arch/powerpc/Kconfig | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/powerpc/Kconfig b/arch/powerpc/Kconfig
+index c33e3ad..3ad94c4 100644
+--- a/arch/powerpc/Kconfig
++++ b/arch/powerpc/Kconfig
+@@ -60,10 +60,11 @@ config LOCKDEP_SUPPORT
+ 
+ config RWSEM_GENERIC_SPINLOCK
+ 	bool
++	default y if PREEMPT_RT_FULL
+ 
+ config RWSEM_XCHGADD_ALGORITHM
+ 	bool
+-	default y
++	default y if !PREEMPT_RT_FULL
+ 
+ config GENERIC_LOCKBREAK
+ 	bool
+-- 
+1.8.3.1
+

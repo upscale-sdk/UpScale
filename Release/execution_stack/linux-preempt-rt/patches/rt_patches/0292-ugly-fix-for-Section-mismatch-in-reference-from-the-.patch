@@ -1,0 +1,96 @@
+From 808188c42d8af5ebadc32905caf927e6bb400263 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Mon, 6 Jun 2016 15:05:09 +0200
+Subject: [PATCH 292/311] (ugly) fix for: Section mismatch in reference from
+ the function smp_start_secondary_cpu() to the function
+ .init.text:arch_cpu_low_level_startup()
+
+---
+ arch/k1/kernel/setup.c | 5 ++++-
+ arch/k1/kernel/smp.c   | 2 +-
+ arch/k1/kernel/time.c  | 4 ++++
+ arch/k1/mach-k1a/tlb.c | 4 ++++
+ arch/k1/mach-k1b/tlb.c | 4 ++++
+ 5 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/arch/k1/kernel/setup.c b/arch/k1/kernel/setup.c
+index ebfd8db..7dd3ab8 100644
+--- a/arch/k1/kernel/setup.c
++++ b/arch/k1/kernel/setup.c
+@@ -266,8 +266,11 @@ void __init setup_arch(char **cmdline_p)
+ }
+ 
+ /* Low-level startup before start_kernel */
+-
++#if defined(CONFIG_SMP)
++void __cpuinit arch_cpu_low_level_startup(void)
++#else
+ void __init arch_cpu_low_level_startup(void)
++#endif
+ {
+ 	/* set interrupt and exception vectors */
+ 	__k1_vector_set(K1_EXCEPTION_VECTOR);
+diff --git a/arch/k1/kernel/smp.c b/arch/k1/kernel/smp.c
+index b54223a..0a92969 100644
+--- a/arch/k1/kernel/smp.c
++++ b/arch/k1/kernel/smp.c
+@@ -120,7 +120,7 @@ void __init smp_prepare_boot_cpu(void)
+ }
+ 
+ /* This function is run by SMP secondary processors */
+-void smp_start_secondary_cpu(unsigned int cpu)
++void __cpuinit smp_start_secondary_cpu(unsigned int cpu)
+ {
+ 	struct task_struct *idle;
+ 	struct thread_info *ti;
+diff --git a/arch/k1/kernel/time.c b/arch/k1/kernel/time.c
+index 9d7436a..70927bd 100644
+--- a/arch/k1/kernel/time.c
++++ b/arch/k1/kernel/time.c
+@@ -154,7 +154,11 @@ static int __init k1_clocksource_init(void)
+ 	return 0;
+ }
+ 
++#if defined(CONFIG_SMP)
++void __cpuinit k1_percpu_time_init(void)
++#else
+ void __init k1_percpu_time_init(void)
++#endif
+ {
+ 	u32 clock_divider = cpuinfo.clock_divider - 1;
+ 
+diff --git a/arch/k1/mach-k1a/tlb.c b/arch/k1/mach-k1a/tlb.c
+index 2711990..b006385 100644
+--- a/arch/k1/mach-k1a/tlb.c
++++ b/arch/k1/mach-k1a/tlb.c
+@@ -171,7 +171,11 @@ unsigned int special_mapping_to_virt(void *ptr)
+ 	return (((unsigned int)ptr - (unsigned int)signal_page) + 512*1024);
+ }
+ 
++#if defined(CONFIG_SMP)
++void __cpuinit setup_initial_mapping(void)
++#else
+ void __init setup_initial_mapping(void)
++#endif
+ {
+ 	mmu_init();
+ 	
+diff --git a/arch/k1/mach-k1b/tlb.c b/arch/k1/mach-k1b/tlb.c
+index 1183a47..96d76d4 100644
+--- a/arch/k1/mach-k1b/tlb.c
++++ b/arch/k1/mach-k1b/tlb.c
+@@ -481,7 +481,11 @@ unsigned int special_mapping_to_virt(void *ptr)
+ 	return ((unsigned int)ptr - (unsigned int)signal_page) + 0x400000;
+ }
+ 
++#if defined(CONFIG_SMP)
++void __cpuinit setup_initial_mapping(void)
++#else
+ void __init setup_initial_mapping(void)
++#endif
+ {
+ 	__k1_mmu_clear_error();
+ 
+-- 
+1.8.3.1
+

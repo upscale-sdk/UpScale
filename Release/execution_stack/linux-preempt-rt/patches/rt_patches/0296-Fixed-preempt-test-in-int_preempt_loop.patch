@@ -1,0 +1,25 @@
+From ef1866021cf83294c12eb851a0967846bafe82d7 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Sun, 12 Jun 2016 11:43:55 +0200
+Subject: [PATCH 296/311] Fixed preempt test in int_preempt_loop
+
+---
+ arch/k1/mach-k1b/interrupts.S | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/k1/mach-k1b/interrupts.S b/arch/k1/mach-k1b/interrupts.S
+index aedca5c..b6153ab 100644
+--- a/arch/k1/mach-k1b/interrupts.S
++++ b/arch/k1/mach-k1b/interrupts.S
+@@ -144,7 +144,7 @@ int_preempt_inner_loop:
+ 	;;
+ 	and     $r0 = $r0, (8 + 32) ##_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY
+ 	;;
+-	cb.nez 	$r1, int_preempt_inner_loop
++	cb.nez 	$r0, int_preempt_inner_loop
+ 	;;
+ 	set 	$ra = $r15
+ 	;;
+-- 
+1.8.3.1
+

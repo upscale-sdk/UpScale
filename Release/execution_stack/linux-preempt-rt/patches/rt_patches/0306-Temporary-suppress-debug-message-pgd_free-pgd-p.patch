@@ -1,0 +1,24 @@
+From 88c2801eb789b916e73cb4e84ee248da173ccb07 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Wed, 15 Jun 2016 10:09:17 +0200
+Subject: [PATCH 306/311] Temporary suppress debug message 'pgd_free: pgd=%p'
+
+---
+ arch/k1/include/asm/pgalloc.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/k1/include/asm/pgalloc.h b/arch/k1/include/asm/pgalloc.h
+index 37fbeac..611fcda 100644
+--- a/arch/k1/include/asm/pgalloc.h
++++ b/arch/k1/include/asm/pgalloc.h
+@@ -88,7 +88,6 @@ static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
+ 
+ static inline void pgd_free(struct mm_struct *mm, pgd_t *pgd)
+ {
+-	printk(KERN_DEBUG "pgd_free: pgd=%p\n", pgd);
+ 	free_page((unsigned long)pgd);
+ }
+ 
+-- 
+1.8.3.1
+

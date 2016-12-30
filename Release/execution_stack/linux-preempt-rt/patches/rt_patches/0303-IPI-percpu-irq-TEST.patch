@@ -1,0 +1,40 @@
+From 94fb530a89efa2e303d315445f8fcc80e2b13297 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Tue, 14 Jun 2016 09:07:28 +0200
+Subject: [PATCH 303/311] IPI percpu irq (TEST)
+
+---
+ arch/k1/kernel/smp.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/k1/kernel/smp.c b/arch/k1/kernel/smp.c
+index 89f957d..c154d31 100644
+--- a/arch/k1/kernel/smp.c
++++ b/arch/k1/kernel/smp.c
+@@ -70,19 +70,19 @@ void smp_percpu_configure_ipi(void)
+ {
+ 	int ret;
+ 
+-	ret = request_irq(IPI_IRQ_NUMBER0, __ipi_isr, IRQF_NO_THREAD, "IPI", NULL);
++	ret = request_irq(IPI_IRQ_NUMBER0, __ipi_isr, IRQF_PERCPU | IRQF_NO_THREAD, "IPI", NULL);
+ 	if (ret)
+ 		panic("Cannot register IPI handler for RM0\n");
+ 
+-	ret = request_irq(IPI_IRQ_NUMBER1, __ipi_isr, IRQF_NO_THREAD, "IPI", NULL);
++	ret = request_irq(IPI_IRQ_NUMBER1, __ipi_isr, IRQF_PERCPU | IRQF_NO_THREAD, "IPI", NULL);
+ 	if (ret)
+ 		panic("Cannot register IPI handler for RM1\n");
+ 
+-	ret = request_irq(IPI_IRQ_NUMBER2, __ipi_isr, IRQF_NO_THREAD, "IPI", NULL);
++	ret = request_irq(IPI_IRQ_NUMBER2, __ipi_isr, IRQF_PERCPU | IRQF_NO_THREAD, "IPI", NULL);
+ 	if (ret)
+ 		panic("Cannot register IPI handler for RM2\n");
+ 
+-	ret = request_irq(IPI_IRQ_NUMBER3, __ipi_isr, IRQF_NO_THREAD, "IPI", NULL);
++	ret = request_irq(IPI_IRQ_NUMBER3, __ipi_isr, IRQF_PERCPU | IRQF_NO_THREAD, "IPI", NULL);
+ 	if (ret)
+ 		panic("Cannot register IPI handler for RM3\n");
+ }
+-- 
+1.8.3.1
+

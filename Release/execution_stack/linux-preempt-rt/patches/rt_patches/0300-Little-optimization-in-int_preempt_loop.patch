@@ -1,0 +1,41 @@
+From e659324706be53d33d3dd01c961c64e2f448e384 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Mon, 13 Jun 2016 14:25:08 +0200
+Subject: [PATCH 300/311] Little optimization in int_preempt_loop
+
+---
+ arch/k1/mach-k1b/interrupts.S | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/arch/k1/mach-k1b/interrupts.S b/arch/k1/mach-k1b/interrupts.S
+index cef6dda..8ac2c9c 100644
+--- a/arch/k1/mach-k1b/interrupts.S
++++ b/arch/k1/mach-k1b/interrupts.S
+@@ -127,15 +127,13 @@ ENDPROC(_machine_int_handler)
+ 
+ ENTRY(int_preempt_loop)
+ 	get 	$r15 = $ra
++	add 	$r12 = $r12, -16
+ 	;;
+ int_preempt_inner_loop:
+ 	make 	$r2 = preempt_schedule_irq
+ 	;;
+-	add 	$r12 = $r12, -16
+ 	icall 	$r2
+ 	;;
+-	add 	$r12 = $r12, 16
+-	;;
+ 	lw      $r0 = OFFSET_ti_flags[$r16]
+ 	;;
+ 	and     $r0 = $r0, (8 + 32) ##_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY
+@@ -143,6 +141,7 @@ int_preempt_inner_loop:
+ 	cb.nez 	$r0, int_preempt_inner_loop
+ 	;;
+ 	set 	$ra = $r15
++	add 	$r12 = $r12, 16
+ 	;;
+ 	ret
+ 	;;
+-- 
+1.8.3.1
+

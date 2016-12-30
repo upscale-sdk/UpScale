@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+exec @abs_builddir@/mercurium-nanox openmp $1

@@ -1,0 +1,41 @@
+From 97bc3ede8a2c7f7a76f395388391666e496f669d Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 22 Jul 2011 08:07:08 +0200
+Subject: [PATCH 068/311] signal-fix-up-rcu-wreckage.patch
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ kernel/signal.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/signal.c b/kernel/signal.c
+index b12e312..2f223e1 100644
+--- a/kernel/signal.c
++++ b/kernel/signal.c
+@@ -1394,12 +1394,12 @@ struct sighand_struct *__lock_task_sighand(struct task_struct *tsk,
+ 	struct sighand_struct *sighand;
+ 
+ 	for (;;) {
+-		local_irq_save(*flags);
++		local_irq_save_nort(*flags);
+ 		rcu_read_lock();
+ 		sighand = rcu_dereference(tsk->sighand);
+ 		if (unlikely(sighand == NULL)) {
+ 			rcu_read_unlock();
+-			local_irq_restore(*flags);
++			local_irq_restore_nort(*flags);
+ 			break;
+ 		}
+ 
+@@ -1410,7 +1410,7 @@ struct sighand_struct *__lock_task_sighand(struct task_struct *tsk,
+ 		}
+ 		spin_unlock(&sighand->siglock);
+ 		rcu_read_unlock();
+-		local_irq_restore(*flags);
++		local_irq_restore_nort(*flags);
+ 	}
+ 
+ 	return sighand;
+-- 
+1.8.3.1
+

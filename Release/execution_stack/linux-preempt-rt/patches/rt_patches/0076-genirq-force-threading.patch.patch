@@ -1,0 +1,54 @@
+From 957a8f40998747d67f97a668b9e341972f0a98fe Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Sun, 3 Apr 2011 11:57:29 +0200
+Subject: [PATCH 076/311] genirq-force-threading.patch
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+---
+ include/linux/interrupt.h | 8 ++++++--
+ kernel/irq/manage.c       | 2 ++
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/interrupt.h b/include/linux/interrupt.h
+index 3f3a4e2..6fb89c4 100644
+--- a/include/linux/interrupt.h
++++ b/include/linux/interrupt.h
+@@ -383,9 +383,13 @@ static inline int disable_irq_wake(unsigned int irq)
+ 
+ 
+ #ifdef CONFIG_IRQ_FORCED_THREADING
+-extern bool force_irqthreads;
++# ifndef CONFIG_PREEMPT_RT_BASE
++   extern bool force_irqthreads;
++# else
++#  define force_irqthreads	(true)
++# endif
+ #else
+-#define force_irqthreads	(0)
++#define force_irqthreads	(false)
+ #endif
+ 
+ #ifndef __ARCH_SET_SOFTIRQ_PENDING
+diff --git a/kernel/irq/manage.c b/kernel/irq/manage.c
+index fa17855..ab96f5b 100644
+--- a/kernel/irq/manage.c
++++ b/kernel/irq/manage.c
+@@ -22,6 +22,7 @@
+ #include "internals.h"
+ 
+ #ifdef CONFIG_IRQ_FORCED_THREADING
++# ifndef CONFIG_PREEMPT_RT_BASE
+ __read_mostly bool force_irqthreads;
+ 
+ static int __init setup_forced_irqthreads(char *arg)
+@@ -30,6 +31,7 @@ static int __init setup_forced_irqthreads(char *arg)
+ 	return 0;
+ }
+ early_param("threadirqs", setup_forced_irqthreads);
++# endif
+ #endif
+ 
+ /**
+-- 
+1.8.3.1
+

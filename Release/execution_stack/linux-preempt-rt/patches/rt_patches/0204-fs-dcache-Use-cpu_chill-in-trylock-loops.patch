@@ -1,0 +1,124 @@
+From 4b0bcb275a23e71f52ab17096f223e5251ea67c3 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Wed, 7 Mar 2012 21:00:34 +0100
+Subject: [PATCH 204/311] fs: dcache: Use cpu_chill() in trylock loops
+
+Retry loops on RT might loop forever when the modifying side was
+preempted. Use cpu_chill() instead of cpu_relax() to let the system
+make progress.
+
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Cc: stable-rt@vger.kernel.org
+---
+ fs/autofs4/autofs_i.h | 1 +
+ fs/autofs4/expire.c   | 2 +-
+ fs/dcache.c           | 7 ++++---
+ fs/namespace.c        | 7 ++++---
+ 4 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/fs/autofs4/autofs_i.h b/fs/autofs4/autofs_i.h
+index 3f1128b..c2ed9c4 100644
+--- a/fs/autofs4/autofs_i.h
++++ b/fs/autofs4/autofs_i.h
+@@ -34,6 +34,7 @@
+ #include <linux/sched.h>
+ #include <linux/mount.h>
+ #include <linux/namei.h>
++#include <linux/delay.h>
+ #include <asm/current.h>
+ #include <asm/uaccess.h>
+ 
+diff --git a/fs/autofs4/expire.c b/fs/autofs4/expire.c
+index 13ddec9..b2f1903 100644
+--- a/fs/autofs4/expire.c
++++ b/fs/autofs4/expire.c
+@@ -157,7 +157,7 @@ again:
+ 			parent = p->d_parent;
+ 			if (!spin_trylock(&parent->d_lock)) {
+ 				spin_unlock(&p->d_lock);
+-				cpu_relax();
++				cpu_chill();
+ 				goto relock;
+ 			}
+ 			spin_unlock(&p->d_lock);
+diff --git a/fs/dcache.c b/fs/dcache.c
+index f09b908..2e245d1 100644
+--- a/fs/dcache.c
++++ b/fs/dcache.c
+@@ -37,6 +37,7 @@
+ #include <linux/rculist_bl.h>
+ #include <linux/prefetch.h>
+ #include <linux/ratelimit.h>
++#include <linux/delay.h>
+ #include "internal.h"
+ #include "mount.h"
+ 
+@@ -453,7 +454,7 @@ static inline struct dentry *dentry_kill(struct dentry *dentry, int ref)
+ 	if (inode && !spin_trylock(&inode->i_lock)) {
+ relock:
+ 		spin_unlock(&dentry->d_lock);
+-		cpu_relax();
++		cpu_chill();
+ 		return dentry; /* try again with same dentry */
+ 	}
+ 	if (IS_ROOT(dentry))
+@@ -835,7 +836,7 @@ relock:
+ 
+ 		if (!spin_trylock(&dentry->d_lock)) {
+ 			spin_unlock(&dcache_lru_lock);
+-			cpu_relax();
++			cpu_chill();
+ 			goto relock;
+ 		}
+ 
+@@ -2072,7 +2073,7 @@ again:
+ 	if (dentry->d_count == 1) {
+ 		if (!spin_trylock(&inode->i_lock)) {
+ 			spin_unlock(&dentry->d_lock);
+-			cpu_relax();
++			cpu_chill();
+ 			goto again;
+ 		}
+ 		dentry->d_flags &= ~DCACHE_CANT_MOUNT;
+diff --git a/fs/namespace.c b/fs/namespace.c
+index 7542c79..c8c535d 100644
+--- a/fs/namespace.c
++++ b/fs/namespace.c
+@@ -23,6 +23,7 @@
+ #include <linux/uaccess.h>
+ #include <linux/proc_ns.h>
+ #include <linux/magic.h>
++#include <linux/delay.h>
+ #include "pnode.h"
+ #include "internal.h"
+ 
+@@ -317,7 +318,7 @@ int __mnt_want_write(struct vfsmount *m)
+ 	smp_mb();
+ 	while (ACCESS_ONCE(mnt->mnt.mnt_flags) & MNT_WRITE_HOLD) {
+ 		preempt_enable();
+-		cpu_relax();
++		cpu_chill();
+ 		preempt_disable();
+ 	}
+ 	/*
+@@ -1289,7 +1290,7 @@ static int do_umount(struct mount *mnt, int flags)
+ 	return retval;
+ }
+ 
+-/* 
++/*
+  * Is the caller allowed to modify his namespace?
+  */
+ static inline bool may_mount(void)
+@@ -1717,7 +1718,7 @@ static int do_loopback(struct path *path, const char *old_name,
+ 
+ 	err = -EINVAL;
+ 	if (mnt_ns_loop(&old_path))
+-		goto out; 
++		goto out;
+ 
+ 	mp = lock_mount(path);
+ 	err = PTR_ERR(mp);
+-- 
+1.8.3.1
+

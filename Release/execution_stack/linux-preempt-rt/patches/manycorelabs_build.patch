@@ -1,0 +1,19 @@
+diff --git a/valid/hudson/buildroot_build.rb b/valid/hudson/buildroot_build.rb
+index 5135d00..c044174 100755
+--- a/valid/hudson/buildroot_build.rb
++++ b/valid/hudson/buildroot_build.rb
+@@ -263,6 +263,14 @@ $linux_configs = {
+ 		:valid_platform => [:hw],
+ 		:release => false
+ 	},
++	"k1bio_developer_smp_mmu_rt" => {
++		:core => "k1bio",
++		:board => "developer",
++		:kconfig => "k1bio_developer_smp_mmu_rt_defconfig",
++		:skip_build => false,
++		:valid_platform => [:hw],
++		:release => false
++	},
+ 	"k1bio_developer_mmu" => {
+ 		:core => "k1bio",
+ 		:board => "developer",

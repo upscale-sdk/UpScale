@@ -1,0 +1,97 @@
+From f52ad6000778e36000b74d7de64dd04dbb096727 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@linutronix.de>
+Date: Fri, 5 Jul 2013 12:09:18 +0200
+Subject: [PATCH 112/311] hrtimers: Move SMP function call to thread context
+
+commit 5ec2481b7b47a4005bb446d176e5d0257400c77d upstream.
+
+smp_call_function_* must not be called from softirq context.
+
+But clock_was_set() which calls on_each_cpu() is called from softirq
+context to implement a delayed clock_was_set() for the timer interrupt
+handler. Though that almost never gets invoked. A recent change in the
+resume code uses the softirq based delayed clock_was_set to support
+Xens resume mechanism.
+
+linux-next contains a new warning which warns if smp_call_function_*
+is called from softirq context which gets triggered by that Xen
+change.
+
+Fix this by moving the delayed clock_was_set() call to a work context.
+
+Reported-and-tested-by: Artem Savkov <artem.savkov@gmail.com>
+Reported-by: Sasha Levin <sasha.levin@oracle.com>
+Cc: David Vrabel <david.vrabel@citrix.com>
+Cc: Ingo Molnar <mingo@kernel.org>
+Cc: H. Peter Anvin <hpa@zytor.com>,
+Cc: Konrad Wilk <konrad.wilk@oracle.com>
+Cc: John Stultz <john.stultz@linaro.org>
+Cc: xen-devel@lists.xen.org
+Cc: stable@vger.kernel.org
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ kernel/hrtimer.c | 28 +++++++++++++---------------
+ 1 file changed, 13 insertions(+), 15 deletions(-)
+
+diff --git a/kernel/hrtimer.c b/kernel/hrtimer.c
+index f4205d1..23edd2d 100644
+--- a/kernel/hrtimer.c
++++ b/kernel/hrtimer.c
+@@ -722,17 +722,20 @@ static int hrtimer_switch_to_hres(void)
+ 	return 1;
+ }
+ 
++static void clock_was_set_work(struct work_struct *work)
++{
++	clock_was_set();
++}
++
++static DECLARE_WORK(hrtimer_work, clock_was_set_work);
++
+ /*
+- * Called from timekeeping code to reprogramm the hrtimer interrupt
+- * device. If called from the timer interrupt context we defer it to
+- * softirq context.
++ * Called from timekeeping and resume code to reprogramm the hrtimer
++ * interrupt device on all cpus.
+  */
+ void clock_was_set_delayed(void)
+ {
+-	struct hrtimer_cpu_base *cpu_base = &__get_cpu_var(hrtimer_bases);
+-
+-	cpu_base->clock_was_set = 1;
+-	__raise_softirq_irqoff(HRTIMER_SOFTIRQ);
++	schedule_work(&hrtimer_work);
+ }
+ 
+ #else
+@@ -781,8 +784,10 @@ void hrtimers_resume(void)
+ 	WARN_ONCE(!irqs_disabled(),
+ 		  KERN_INFO "hrtimers_resume() called with IRQs enabled!");
+ 
++	/* Retrigger on the local CPU */
+ 	retrigger_next_event(NULL);
+-	timerfd_clock_was_set();
++	/* And schedule a retrigger for all others */
++	clock_was_set_delayed();
+ }
+ 
+ static inline void timer_stats_hrtimer_set_start_info(struct hrtimer *timer)
+@@ -1481,13 +1486,6 @@ void hrtimer_peek_ahead_timers(void)
+ 
+ static void run_hrtimer_softirq(struct softirq_action *h)
+ {
+-	struct hrtimer_cpu_base *cpu_base = &__get_cpu_var(hrtimer_bases);
+-
+-	if (cpu_base->clock_was_set) {
+-		cpu_base->clock_was_set = 0;
+-		clock_was_set();
+-	}
+-
+ 	hrtimer_peek_ahead_timers();
+ }
+ 
+-- 
+1.8.3.1
+

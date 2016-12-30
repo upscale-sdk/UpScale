@@ -1,0 +1,111 @@
+From 8a5ddf176eabc00202414bcb64545f3d2c17f922 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Thu, 2 Jun 2016 15:52:15 +0200
+Subject: [PATCH 284/311] Initial support for _TIF_NEED_RESCHED_LAZY
+
+---
+ arch/k1/include/asm/thread_info.h |  5 +++++
+ arch/k1/kernel/asm-offsets.c      |  1 +
+ arch/k1/mach-k1b/common_ret.S     | 33 ++++++++++++++++++++++++++++++++-
+ 3 files changed, 38 insertions(+), 1 deletion(-)
+
+diff --git a/arch/k1/include/asm/thread_info.h b/arch/k1/include/asm/thread_info.h
+index 5283225..5c31983 100644
+--- a/arch/k1/include/asm/thread_info.h
++++ b/arch/k1/include/asm/thread_info.h
+@@ -27,6 +27,7 @@ struct thread_info {
+ 	int cpu;		/* our cpu */
+ 	unsigned long flags;	/* low level flags */
+ 	int preempt_count;	/* 0 => preemptable, <0 => BUG */
++	int preempt_lazy_count;	/* 0 => preemptable, <0 => bug */
+ 	mm_segment_t addr_limit;	/* address limit */
+ 	struct restart_block restart_block;
+ };
+@@ -77,6 +78,9 @@ static inline void arch_set_thread_info(struct thread_info *ti)
+ #define TIF_SINGLESTEP		4	/* restore singlestep on return to user
+ 					 * mode
+ 					 */
++
++#define TIF_NEED_RESCHED_LAZY	5	/* lazy rescheduling necessary */
++
+ #define TIF_SYSCALL_TRACEPOINT  8	/* for ftrace syscall instrumentation */
+ #define TIF_RESTORE_SIGMASK     9
+ #define TIF_POLLING_NRFLAG	16	/* true if poll_idle() is polling                                                * TIF_NEED_RESCHED
+@@ -87,6 +91,7 @@ static inline void arch_set_thread_info(struct thread_info *ti)
+ #define _TIF_NOTIFY_RESUME	(1<<TIF_NOTIFY_RESUME)
+ #define _TIF_SIGPENDING		(1<<TIF_SIGPENDING)
+ #define _TIF_NEED_RESCHED	(1<<TIF_NEED_RESCHED)
++#define _TIF_NEED_RESCHED_LAZY	(1<<TIF_NEED_RESCHED_LAZY)
+ #define _TIF_SINGLESTEP		(1<<TIF_SINGLESTEP)
+ #define _TIF_RESTORE_SIGMASK     (1<<TIF_RESTORE_SIGMASK)
+ #define _TIF_POLLING_NRFLAG	(1<<TIF_POLLING_NRFLAG)
+diff --git a/arch/k1/kernel/asm-offsets.c b/arch/k1/kernel/asm-offsets.c
+index 573dfda..583e4f8 100644
+--- a/arch/k1/kernel/asm-offsets.c
++++ b/arch/k1/kernel/asm-offsets.c
+@@ -13,6 +13,7 @@ int foo(void)
+ 
+ 	OFFSET(OFFSET_ti_flags, thread_info, flags);
+ 	OFFSET(OFFSET_ti_preempt_count, thread_info, preempt_count);
++	OFFSET(OFFSET_ti_preempt_lazy_count, thread_info, preempt_lazy_count);
+ 
+ 	DEFINE(THREAD_STACK_SIZE, THREAD_SIZE);
+ 	DEFINE(STACK_OFFSET, THREAD_SIZE - 16);
+diff --git a/arch/k1/mach-k1b/common_ret.S b/arch/k1/mach-k1b/common_ret.S
+index c319164..222ddf8 100644
+--- a/arch/k1/mach-k1b/common_ret.S
++++ b/arch/k1/mach-k1b/common_ret.S
+@@ -36,7 +36,7 @@ ENTRY(work_pending)
+ 	get	$r15 = $ra
+ 	add     $r12 = $r12, -16
+ 	;;
+-	cb.nez  $r4, check_preempt_count
++	cb.nez  $r4, check_preempt_count ## from sys mode
+ 	;;
+ 	copy    $r2 = $r0
+ 	;;
+@@ -73,10 +73,41 @@ check_need_resched:
+ 	;;
+ 	and     $r1 = $r0, 8 ##_TIF_NEED_RESCHED
+ 	;;
++	cb.eqz  $r1, check_preemt_count_lazy
++	;;
++	icall   $r2
++	;;
++	goto 	check_resched_flags
++	;;
++check_preemt_count_lazy:
++	lw      $r1 = OFFSET_ti_preempt_lazy_count[$r16]
++	;;
++	comp.gt $r1 = $r1, 0
++	;;
++	## Back to kernel, preempt_schedule_irq must be called.
++	cb.nez  $r1, end_work_pending
++	make	$r2 = preempt_schedule_irq
++	;;
++	## bm check (_TIF_NEED_RESCHED_LAZY)
++	and     $r1 = $r0, 32 ##_TIF_NEED_RESCHED_LAZY (see arch/k1/include/asm/thread_info.h)
++	;;
+ 	cb.eqz  $r1, end_work_pending
++	make	$r2 = preempt_schedule_irq
+ 	;;
+ 	icall   $r2
+ 	;;
++check_resched_flags:
++	lw      $r0 = OFFSET_ti_flags[$r16]
++	;;
++	and     $r1 = $r0, (8 + 32) ##_TIF_NEED_RESCHED | _TIF_NEED_RESCHED_LAZY
++	;;
++	cb.eqz  $r1, end_work_pending
++	make	$r2 = preempt_schedule_irq
++	;;
++	icall 	$r2
++	;;
++	goto 	check_need_resched
++	;;
+ end_work_pending:
+ 	add     $r12 = $r12, 16
+ 	set	$ra = $r15
+-- 
+1.8.3.1
+

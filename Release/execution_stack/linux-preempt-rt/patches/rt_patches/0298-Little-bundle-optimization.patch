@@ -1,0 +1,37 @@
+From cac42dacf7137b9e77b40ec4a466e01228163428 Mon Sep 17 00:00:00 2001
+From: Bruno Morelli <b.morelli@evidence.eu.com>
+Date: Mon, 13 Jun 2016 12:42:20 +0200
+Subject: [PATCH 298/311] Little bundle optimization
+
+---
+ arch/k1/mach-k1b/interrupts.S   | 1 -
+ arch/k1/mach-k1b/trap_handler.S | 1 -
+ 2 files changed, 2 deletions(-)
+
+diff --git a/arch/k1/mach-k1b/interrupts.S b/arch/k1/mach-k1b/interrupts.S
+index b6153ab..073aed1 100644
+--- a/arch/k1/mach-k1b/interrupts.S
++++ b/arch/k1/mach-k1b/interrupts.S
+@@ -62,7 +62,6 @@ int_check_work_pending:
+ 	icall 	$r7
+ 	;;
+ 	add 	$r12 = $r12, 16
+-	;;
+ 	goto 	int_check_work_pending
+ 	;;
+ int_check_signal:
+diff --git a/arch/k1/mach-k1b/trap_handler.S b/arch/k1/mach-k1b/trap_handler.S
+index f4656ef..f5f6a97 100644
+--- a/arch/k1/mach-k1b/trap_handler.S
++++ b/arch/k1/mach-k1b/trap_handler.S
+@@ -129,7 +129,6 @@ trap_check_work_pending:
+ 	icall 	$r7
+ 	;;
+ 	add 	$r12 = $r12, 16
+-	;;
+ 	goto 	trap_check_work_pending
+ 	;;
+ trap_check_signal:
+-- 
+1.8.3.1
+
