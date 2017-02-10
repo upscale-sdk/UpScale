@@ -41,6 +41,7 @@ namespace TL { namespace Nanos6 {
 namespace
 {
 const char *entry_points[] = {
+    "nanos_in_final",
     "nanos_create_task",
     "nanos_submit_task",
     "nanos_taskwait",
@@ -50,6 +51,7 @@ const char *entry_points[] = {
     "nanos_register_weak_read_depinfo",
     "nanos_register_weak_write_depinfo",
     "nanos_register_weak_readwrite_depinfo",
+    "nanos_register_commutative_depinfo",
     "nanos_user_lock",
     "nanos_user_unlock",
 };

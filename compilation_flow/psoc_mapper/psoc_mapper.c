@@ -34,15 +34,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
- * #include <stdint.h>
+#include <stdint.h>
 #include "sched.h"
 
- * #define ARROW    'a'
+#define ARROW    'a'
 #define NUMBER   'n'
 #define SYMBOL   's'
 #define STRING   't'
 #define COMMENT  'c'
- * #define MAXTOKEN 400
+#define MAXTOKEN 400
 #define MAXDEP 200000
 
 /* This will be printed at the beginning of execution */
@@ -66,6 +66,8 @@ struct gomp_tdg {
 	signed char cnt;
 };
 
+/* Defined also in dag.c. If you edit this structure,
+   remembed to change italso in that file! */
 struct dep {
 	unsigned long src, dst;
 };
@@ -427,6 +429,7 @@ deplist(void)
 			p = &deps[ndeps-1];
 			p->dst = dst;
 			p->src = src;
+			printf("Added dep #%ld: src %ld dst %ld\n", ndeps-1, src, dst); 
 			src = dst;
 		}
 		if(!dst) // no arrow: properties
@@ -552,6 +555,30 @@ read_graph(void)
 
 	graphName[tdg_id] =  xmalloc(sizeof(char)*GRAPHNAME_MAX_LEN);
 	strcpy(graphName[tdg_id],name);
+}
+
+void
+read_extra_infos(void)
+{
+	char name[GRAPHNAME_MAX_LEN];
+	next();
+
+	if (token != SYMBOL || strcmp(tokenval.s, "digraph"))
+		error("digraph expected");
+	next();
+
+	accept(SYMBOL);
+	strcpy(name, toktext);
+	printf("name '%s' graphName '%s' cmp %d\n", name, graphName[tdg_id],strcmp(name, graphName[tdg_id]));
+	
+	if(!strcmp(name, graphName[tdg_id])) {
+		expect('{');
+		deplist();
+		expect('}');
+	}
+	else {
+		error("digraph name in file does not match what expected (i.e., '%s' against '%s')\n", name, graphName[tdg_id]);
+	}
 }
 
 void
@@ -827,15 +854,12 @@ main(int argc, char *argv[])
 	// The rest of arguments are TDGs included in .dot files
 	num_tdgs = argc;
 	
-	if(timing == TIMING_NONE)
-	{
-		if(scheduling == ANALYZE_STATIC)
-		{
+	if(timing == TIMING_NONE) {
+		if(scheduling == ANALYZE_STATIC) {
 			timing = TIMING_MAET;
 			printf("Performing static sched. analysis: using MAET by default as timing attribute\n");
 		}
-		else
-		{
+		else {
 			timing = TIMING_MIET;
 			printf("Using MIET by default as timing attribute\n");
 		}
@@ -875,14 +899,32 @@ main(int argc, char *argv[])
 		}
 
 		read_graph();
+		
+		char readAdditionalNodes = 1;
+		if(readAdditionalNodes) {
+			char additionalNodesFilename[GRAPHNAME_MAX_LEN + 10];
+// 			snprintf(additionalNodesFilename, strlen(graphName[tdg_id]) + 4, "%s-extra.dot", graphName[tdg_id]);
+			sprintf(additionalNodesFilename, "%s-extra.dot", graphName[tdg_id]);
+			printf("Will read additional nodes for graph '%s' from file is '%s'\n", graphName[tdg_id], additionalNodesFilename);
+			 
+			if(fgraph) {
+				fclose(fgraph);
+				fgraph = NULL;
+			}
+			if ((fgraph = fopen(additionalNodesFilename, "r")) == NULL) {
+				printf("Cannot find file %s. Won't read any additional node for graph '%s'\n", additionalNodesFilename, graphName[tdg_id]);
+			}
+			else {
+				read_extra_infos();
+			} // else file found			
+		} // if readAdditionalNodes
+		
 		create_tdg_struct();
 		
 		int err;
-		if(scheduling != NONE)
-		{
+		if(scheduling != NONE) {
 			wcet_t *wcet;
-			switch(timing)
-			{
+			switch(timing) {
 				case TIMING_MIET:
 					wcet = &MIETs[0];
 					break;
@@ -897,7 +939,7 @@ main(int argc, char *argv[])
 					break;
 			} // switch
 			
-			err = dagCreate(graphName[tdg_id], tdg_id, &nodes[0], &wcet[0], &nodeMap[0], nnodes[tdg_id], &deps[0], ndeps, &dag[tdg_id]);
+			err = dagCreate(graphName[tdg_id], tdg_id, &nodes[0], &wcet[0], &nodeMap[0], nnodes[tdg_id], &deps[0], ndeps, 1 /* Fix single source-single sink */, &dag[tdg_id]);
 			
 			if(err) {
 				printf("Error %d creating DAG! Exiting...\n", err);
@@ -978,6 +1020,11 @@ main(int argc, char *argv[])
 			default:
 				break;
 		} // switch
+
+		printf("Application schedulable: \"%s\"\n", isSchedulable ? "Yes" : "No");
+		for(i=0; i<num_tdgs; i++) {
+			printf("Offload %d: Analysis response time = %lld \n", i, dag[i]->R);
+		}
 		
 		printf("Schedulability analysis returned: \"%s\"\n", isSchedulable ? "Yes" : "No");
 		fprintf(fout, "// Schedulability analysis returned: \"%s\"\n", isSchedulable ? "Yes" : "No");

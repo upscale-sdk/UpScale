@@ -481,7 +481,29 @@ insert_values:
             collect_condition_info(_edge->get_target(), n.get_rhs(), /*is_source*/false);
         }
     };
-    
+
+    static void get_operands_position(
+            size_t init,
+            std::string condition_str,
+            size_t& min_logical_op,
+            size_t& min_comp_op)
+    {
+        size_t tmp_or = condition_str.find("||", init);
+        size_t tmp_and = condition_str.find("&&", init);
+        min_logical_op = (tmp_or < tmp_and ? tmp_or : tmp_and);
+        size_t tmp_eq = condition_str.find("==", init);
+        size_t tmp_l_eq = condition_str.find("<=", init);
+        size_t tmp_g_eq = condition_str.find(">=", init);
+        min_comp_op = (tmp_eq < tmp_l_eq
+                            ? (tmp_eq < tmp_g_eq
+                                    ? tmp_eq
+                                    : tmp_g_eq)
+                            : (tmp_l_eq < tmp_g_eq
+                                    ? tmp_l_eq
+                                    : tmp_g_eq)
+                        );
+    }
+
     static void replace_vars_with_ids(
             const VarToNodeclMap& var_to_values_map,
             VarToNodeclMap& var_to_id_map,
@@ -502,33 +524,31 @@ insert_values:
             while (init != std::string::npos)
             {
                 // check whether this occurrence belongs to the LHS or the RHS of the condition
-                size_t tmp_or = condition_str.find("||", init);
-                size_t tmp_and = condition_str.find("&&", init);
-                size_t min_logical_op = (tmp_or < tmp_and ? tmp_or : tmp_and);
-                size_t tmp_eq = condition_str.find("==", init);
-                size_t tmp_l_eq = condition_str.find("<=", init);
-                size_t tmp_g_eq = condition_str.find(">=", init);
-                size_t min_comp_op = (tmp_eq < tmp_l_eq
-                                            ? (tmp_eq < tmp_g_eq
-                                                    ? tmp_eq
-                                                    : tmp_g_eq)
-                                            : (tmp_l_eq < tmp_g_eq
-                                                    ? tmp_l_eq
-                                                    : tmp_g_eq)
-                                     );
+
+                size_t min_logical_op, min_comp_op;
+                get_operands_position(init, condition_str, min_logical_op, min_comp_op);
+
                 if ((is_source && (min_comp_op < min_logical_op))
                         || (!is_source && ((min_logical_op < min_comp_op) || (min_logical_op == std::string::npos))))
-                {   // It is a LHS occurrence => replace
-                    // Only replace if the substring found is not a part of another variable
-                    // (example: var_name and var_name_longer)
-                    std::string c_after_var_name = condition_str.substr(init+var.size(), 1);
-                    if (c_after_var_name == "|" || c_after_var_name == "&"              // operation
-                            || c_after_var_name == " " || c_after_var_name == ")"       // other characters
-                            || condition_str.size() == init+var.size())                 // end of string
+                {
+                    // The variable may appear more than once in the same side of a comparison
+                    while (init != std::string::npos
+                        && ((is_source && init < min_comp_op)
+                            || (!is_source && init < min_logical_op)))
                     {
-                        condition_str.replace(init, var.size(), ss.str());
+                        // Only replace if the substring found is not a part of another variable
+                        // (example: var_name and var_name_longer)
+                        std::string c_after_var_name = condition_str.substr(init+var.size(), 1);
+                        if (!isalpha(c_after_var_name.c_str()[0])
+                                || condition_str.size() == init+var.size())                 // end of string
+                        {
+                            condition_str.replace(init, var.size(), ss.str());
+                            get_operands_position(init, condition_str, min_logical_op, min_comp_op);
+                        }
+                        init = condition_str.find(var, init+1);
                     }
                 }
+
                 // prepare the next iteration
                 init = condition_str.find(var, min_logical_op);
             }
@@ -804,16 +824,12 @@ insert_values:
         // The identifier needs to be ordered as the node appears in the source code
         // due to boxer requirements (to avoid backward dependencies during expansion)
         int tdg_node_id;
-        TDGNodeType type = Unknown;
         // Create the TDG node from the PCFG node
         if (current->is_omp_task_node())
         {
             tdg_node_id = current->get_graph_related_ast().get_line();
-            type = Task;
-        }
-        if (type != Unknown)
-        {
-            create_tdg_node(current, tdg_node_id, type);
+            create_tdg_node(current, tdg_node_id, Task);
+            return; // Do not follow synchronization edges after the task
         }
 
         // 4.- Iterate over the children

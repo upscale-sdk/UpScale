@@ -37,16 +37,7 @@
 #include <stdint.h>
 #include "sched.h"
 
-// TODO move on DAG
-char createdByMe = 0;
-
-// FIXME inside dealer.c
-void dumpnodes();
-void dumpdeps();
-
-struct dep {
-	unsigned long src, dst;
-};
+/** Some support functions */
 
 char msg[1024];
 #include <stdio.h>
@@ -58,33 +49,6 @@ void _msg(char * format, ...) {
   va_end (args);
 }
 
-void printNode(const struct node_t *node) {
-	int i;
-	printf("Node idMercurium %ld ", node->idMercurium);
-// 	printf("address 0x%x ", _mycast_ node);
-	printf("C %lld accWorkload %lld ", node->C, node->accWorkload);
-// 	printf("preds 0x%x succs 0x%x", _mycast_ node->preds, _mycast_ node->succs);
-// 	printf("\n");
-	
-	printf("| preds (%ld): ", node->num_preds);
-	if(!node->num_preds)
-		printf("-none- ");
-	else {
-		for(i=0; i<node->num_preds; i++)
-			printf("%u ", _mycast_ node->preds[i]->idMercurium);
-// 			printf("0x%x ", _mycast_ node->preds[i]);
-	}
-	
-	printf("| succs (%ld): ", node->num_succs);
-	if(!node->num_succs)
-		printf("-none- ");
-	else {
-		for(i=0; i<node->num_succs; i++)
-			printf("%u ", _mycast_ node->succs[i]->idMercurium);
-	}
-	printf("\n");
-} // printNode
-
 void printNodesSet(const char * txt, struct node_t **nodes, long nnodes) {
 	printf("%s nnodes %ld: { ", txt, nnodes);
 	int i;
@@ -94,120 +58,6 @@ void printNodesSet(const char * txt, struct node_t **nodes, long nnodes) {
 	
 	printf("}\n");
 } // printNodesSet
-
-void printDag(const struct dag_t* dag) {
-	int i;
-	printf("dag %d (from digraph '%s') @ 0x%x ", dag->tdg_id, dag->name, _mycast_ dag);
-	printf("len %ld vol %lld ", dag->len, dag->vol);
-// 	printf("Z %ld ", dag->Z);
-	printf("D %ld T %ld ", dag->D, dag->T);
-	printf("\n#nodes %ld\n", dag->num_nodes);
-	for(i=0; i<dag->num_nodes; i++)
-		printNode(&dag->v[i]);
-} // printDag
-
-struct dag_t * newDag() {
-	struct dag_t * dag = (struct dag_t *) malloc(sizeof(struct dag_t));
- 	// _log("new dag @ 0x%x\n", _mycast_ dag);
-	dag->v = NULL;
-	dag->num_nodes = 0;
-	dag->D = -1;
-	dag->T = -1;
-	dag->vol = -1;
-	dag->len = -1;
-	dag->R = -1;
-	dag->Z = -1;
-	
-	strcpy(dag->name, "unknown");
-	dag->tdg_id = -1;
-	dag->sched = -1; // unknown
-	
-	return dag;
-} // newDag
-
-void dagDispose(struct dag_t * dag) {
-	int i;
-	
-	if(dag) {
-		for(i =0; i<dag->num_nodes; i++) {
-			free(dag->v[i].preds);
-			free(dag->v[i].succs);
-		}
-		free(dag->v);
-		if(createdByMe)
-			free(dag);
-	}
-} // disposeDag
-
-long nodeIdx(struct node_t where[], long whereSize, struct node_t * who) {
-	int i;
-	for(i=0; i<whereSize; i++)
-		if(where[i].idMercurium == who->idMercurium)
-			return i;
-		
-	return -1L;
-} // nodeIdx
-
-void maxAccWorkload(struct node_t **nodes, long nnodes, wcet_t* max, int *maxIdx) {
-	int j;
-	*max = 0L;
-	*maxIdx = -1;
-	for(j=0; j<nnodes; j++)
-		if(nodes[j]->accWorkload > *max) {
-			*max = nodes[j]->accWorkload;
-			*maxIdx = j;
-		}
-} // maxAccWorkload
-
-void computeAccWorkload(struct node_t *v, long nnodes) {
-	
-	// NOTE Dealer already puts nodes in topo_logical order. Need to process inversely
-	
-	int i, maxIdx;
-	wcet_t max;
-	
-	for(i=0; i<nnodes; i++) {
-		v[i].accWorkload = v[i].C;
-		if(v[i].num_preds) {
-			maxAccWorkload(v[i].preds, v[i].num_preds, &max, &maxIdx);
-			v[i].accWorkload += max;
-		}
-	} // for
-} // computeAccWorkload
-
-int dagCreateEmpty(long nnodes, struct dag_t ** dag) {
-	// Allocate all nodes. Note that in "nodes" they are ordered :)
-	int i;
-	struct node_t *v = (struct node_t*) malloc(sizeof(struct node_t) * nnodes);
-	if(!v)
-		return 1;
-	for(i =0; i<nnodes; i++) {
-		v[i].idMercurium = -1;
-		v[i].preds = NULL;
-		v[i].succs = NULL;
-		v[i].num_preds = 0;
-		v[i].num_succs = 0;
-		v[i].C = -1;
-		v[i].accWorkload = -1;
-		v[i].R = -1;
-		v[i].thread = -1;
-	}
-
-	*dag = newDag();
-	
-	(*dag)->v = &v[0];
-	(*dag)->num_nodes = nnodes;
-	(*dag)->len = -1;
-	(*dag)->vol = -1;
-	(*dag)->R = -1;
-	(*dag)->Z = -1;
-	
-	strcpy((*dag)->name, "");
-	(*dag)->tdg_id = -1;
-	(*dag)->sched = -1; // unknown
-	
-	return 0;
-} // dagCreateEmpty
 
 int tryMappingDagBak(struct dag_t *dst, struct dag_t *src) {
 	int i;
@@ -223,181 +73,39 @@ int tryMappingDagBak(struct dag_t *dst, struct dag_t *src) {
 	return 0;
 } // tryMappingDagBak
 
-/*
- * NOTE topo_logical order must be respected by contruction
- */
-int dagCreate(char *graphName, int tdg_id, long* nodes, wcet_t *wcets, thread_t *nodeMaps, long nnodes, struct dep *deps, long ndeps, struct dag_t *dag[]) {
-	int i,j;
-	
-// 	printf("createDag(tdg_id %d nnodes %ld)\n", tdg_id, nnodes);
-// 	dumpnodes();
-// 	dumpdeps();
-	
-	if(!dag) {
-		printf("Internal structure (i.e., array of DAGs) not initialized\n");
-		return 1;
-	}
-	
-	if(strlen(graphName) >= GRAPHNAME_MAX_LEN) {
-		printf("Graph name too long! (i.e., %d should be %d)\n", (int) strlen(graphName), GRAPHNAME_MAX_LEN);
-		return 1;
-	}
-	
-	// Allocate all nodes. Note that in "nodes" they are ordered :)
-	struct node_t *v = (struct node_t*) malloc(sizeof(struct node_t) * nnodes);
-	if(!v)
-		return 1;
-	for(i =0; i<nnodes; i++) {
-		// FIXME do it in a separate fun?
-		v[i].idMercurium = -1;
-		v[i].dealerIdx = -1;
-		void * datum = malloc(sizeof(struct node_t *) * MAX_PREDS);
-		v[i].preds = datum;
-		datum = malloc(sizeof(struct node_t *) * MAX_SUCCS);
-		v[i].succs = datum;
-		v[i].num_preds = 0;
-		v[i].num_succs = 0;
-		v[i].C = -1;
-		v[i].accWorkload = -1;
-		v[i].R = -1;
-		v[i].thread = -1;
-	}
-	
-	unsigned int *indexes = (unsigned int *) malloc((nodes[nnodes-1]+1) * sizeof(int));
-	
-	for(i=0; i<nnodes; i++) {
-		v[i].idMercurium = nodes[i];
-		v[i].dealerIdx = i;
-		v[i].C = wcets[i];
-		v[i].thread = nodeMaps[i];
-		indexes[nodes[i]] = i;
-	}
-	
-	struct node_t *src, *dst;
-	for(i=0; i<ndeps; i++) {
-		src = &v[indexes[deps[i].src]];
-		dst = &v[indexes[deps[i].dst]];
-		
-		if(src->num_succs >= MAX_SUCCS) {
-			printf("Too many successors for node %ld (%ld instead of %ld)!", src->idMercurium, src->num_succs, MAX_SUCCS);
-			return 2;
-		}
-		if(dst->num_preds >= MAX_PREDS) {
-			printf("Too many predecessors for node %ld (%ld instead of %ld)!", dst->idMercurium, dst->num_preds, MAX_PREDS);
-			return 2;
-		}
-		
-		src->succs[src->num_succs++] = dst;
-		dst->preds[dst->num_preds++] = src;
-	}
-	free(indexes);
-	
-/*  task(i).v = computeAccWorkload(task(i).v); */
-	computeAccWorkload(v, nnodes);
-/*  [~, q] = max([task(i).v.accWorkload]); */
-	wcet_t max = 0;
-	long q = -1;
-	wcet_t vol = 0L;
-	
-	for(j=0; j<nnodes; j++) {
-		if(v[j].accWorkload > max)
-			q = j;
-		vol += v[j].C;
-	}	
-	
-	if(!*dag) {
-		createdByMe = 1;
-		*dag = newDag();
-		// printf("Created new dag @ 0x%x\n", _mycast_ *dag);
-	}
-	
-	if(*dag == 0) {
-		printf("Out of memory!\n");
-		return 1;
-	}
-	
-	(*dag)->v = &v[0];
-	(*dag)->num_nodes = nnodes;
-	(*dag)->len = v[q].accWorkload;
-	(*dag)->vol = vol;
-	(*dag)->R = -1;
-	(*dag)->Z = -1;
-	(*dag)->sched = -1; // unknown
-	
-	strcpy((*dag)->name, graphName);
-	(*dag)->tdg_id = tdg_id;
-	
-	// we need the #cores (aka 'm') to compute Z: can't do this here
-/* 	task(i).Z = task(i).len + (1 / m) * (task(i).wcw - task(i).len);    % simple upper-bound on intra-task interference */
-	 
-	return 0;
-	
-} // createDag
 
-void dagDeleteExistingMaps(struct dag_t **dags, int dagsLength) {
-	/* Delete existing map */
-	int ind, i;
-	for(ind=0; ind<dagsLength; ind++) {
-		printf("Deleting existing MAP for dag %d (from digraph '%s')", dags[ind]->tdg_id, dags[ind]->name);
-		for(i=0; i<dags[ind]->num_nodes; i++) {
-			dags[ind]->v[i].thread = -1;
+/* Returns 0 if everything is ok */
+int findNodesWithoutWcet(const struct dag_t *dag, long wcetUnspecifiedForNodes[], long *count) {
+	if(!dag->countNodesWithoutWcet)
+		return 0;
+	
+	long j = 0;
+	*count = 0;
+	for(j=0; j<dag->num_nodes; j++) {
+		// Allow WCET = 0 (possibly fake nodes?)
+		if(dag->v[j].C < 0) {
+			wcetUnspecifiedForNodes[*count] = j;
+			(*count)++;
 		}
-	} // for
-} // dagDeleteExistingMaps
-
-int dagAssignParams(struct dag_t *dag, char ignoreDeadlinesFromFile) {
-	FILE *fp;
-	char buff[32];
-	long D, T;
-	char * fName = "dagParams.txt";
-	fp = fopen(fName, "r");
-	if(fp == NULL) {
-		printf("Impossible to load params for DAG. File '%s' not found!\n", fName);
-		return 1;
 	}
-	while(!feof(fp)) {
-		fscanf(fp, "%s", buff);
-		fscanf(fp, "%ld", &D);
-		fscanf(fp, "%ld", &T);
-		
-		// "G0" results in tdg_id == 0...check that the string read is actually a number
-		if(buff[0] > '9' || buff[0] < '0')
-			return 1;
-			
-// 		if(!strcmp(dag->name, buff)) {
-		int tdg_id = atoi(buff);
-		if(dag->tdg_id == tdg_id) {
-			// here I am!
-			printf("Assigning D %ld and T %ld to %d. Buff is %s\n", D, T, dag->tdg_id, buff);
-			dag->D = ignoreDeadlinesFromFile ? T : D;
-			dag->T = T;
-			break;
-		}
-		
-	}
-	fclose(fp);
-// 	printDag(dag);
-	return 0;
-} // assignDAGParams
+	
+	return dag->countNodesWithoutWcet;
+} // findNodesWithoutWcet
 
-int cmpDAGsRateMonotonic(const void *p1, const void *p2)
-{
+int cmpDAGsRateMonotonic(const void *p1, const void *p2) {
 	struct dag_t* d1 = * (struct dag_t **) p1, *d2 = * (struct dag_t **) p2;
 	return (d1->D < d2->D ? -1 : 1);
 } // cmpDAGsRateMonotonic
 
-int cmpDAGsTdgId(const void *p1, const void *p2)
-{
+int cmpDAGsTdgId(const void *p1, const void *p2) {
 	struct dag_t* d1 = * (struct dag_t **) p1, *d2 = * (struct dag_t **) p2;
 	return (d1->tdg_id < d2->tdg_id ? -1 : 1);
 } // cmpDAGsTdgId
 
-int cmpNodesByIdMercurium(const void *p1, const void *p2)
-{
+int cmpNodesByIdMercurium(const void *p1, const void *p2) {
 	struct node_t* n1 = * (struct node_t **) p1, *n2 = * (struct node_t **) p2;
 	return (n1->idMercurium < n2->idMercurium? -1 : 1);
 } // cmpDAGsRateMonotonic
-
 
 /** Dynamic strategy */
 
@@ -487,6 +195,17 @@ int dynamicSchedulabilityAnalysis(struct dag_t **dags, int dagsLength, unsigned 
 	
 	ret = 1; // = schedulable
 	for(i=0; i<dagsLength; i++) {
+		
+		long wcetUnspecifiedForNodes[MAX_PREDS];
+		long count = 0;
+		if(findNodesWithoutWcet(dags[i], &wcetUnspecifiedForNodes[0], &count)) {
+			int j;
+			printf("[%s] ERROR (1). WCET unspecified for nodes: ", __func__);
+			for(j=0; j<count; j++)
+				printf("'%ld' ", wcetUnspecifiedForNodes[j]);
+			printf(" in DAG %d ('%s'). Exiting..\n", dags[i]->tdg_id, dags[i]->name);
+			return 0;
+		}
 		
 		int interferingDagsLength;
 		// Ugly. Do it in a more efficient way
@@ -609,6 +328,11 @@ void staticGetInReachables(struct dag_t** dags, long ind, struct node_t *v, stru
 			
 			if(threadPrev == thread &&
 			   !ismember(v->preds[i], &inR[0], *numInR)) {
+				if(*numInR >= MAX_PREDS) {
+					printf("ERROR Too many predecessors (i.e., %ld, should be %ld)\n", *numInR, MAX_PREDS);
+					exit(1);
+				}
+// 				printf("Adding node %ld as %ld-th predecessors of node %ld\n", v->preds[i]->idMercurium, *numInR, v->idMercurium);
 				inR[*numInR] = v->preds[i];
 				(*numInR)++;
 			} // if
@@ -634,6 +358,11 @@ void staticGetOutReachables(struct dag_t** dags, long ind, struct node_t *v, str
 			threadSucc = v->succs[i]->thread;
 			if(threadSucc == thread &&
 			   !ismember(v->succs[i], &outR[0], *numOutR)) {
+				if(*numOutR >= MAX_SUCCS) {
+					printf("ERROR Too many successors (i.e., %ld, should be %ld)\n", *numOutR, MAX_SUCCS);
+					exit(1);
+				}
+// 				printf("Adding node %ld as %ld-th successor of node %ld\n", v->succs[i]->idMercurium, *numOutR, v->idMercurium);
 				outR[*numOutR] = v->succs[i];
 				(*numOutR)++;
 			} // if
@@ -858,8 +587,7 @@ int staticSchedulabilityCheckBF(struct dag_t ** dags, long dagsLength, long ind,
 				Rmax = checkedVert[i]->preds[j]->R;
 		}
 	
-		// FIXME do it more efficiently...
-		int k = nodeIdx(&dags[ind]->v[0], dags[ind]->num_nodes, checkedVert[i]);
+		int k = dagFindNodeIdx(&dags[ind]->v[0], dags[ind]->num_nodes, checkedVert[i]);
 		schedV = staticTryAllocationBestFit(dags, dagsLength, ind, k, checkedVert[i]->tryThread, Rmax, &R);
 		
 		if(schedV == 0)	 {
@@ -904,6 +632,18 @@ int staticSchedulabilityAnalysisAndMapping(struct dag_t **dags, int dagsLength, 
 	struct dag_t *task_save, **task_new_proc;
 	task_new_proc = (struct dag_t **) malloc(sizeof(struct dag_t **) * ncores);
 	for(ind=0; ind<dagsLength; ind++) {
+		
+		long wcetUnspecifiedForNodes[MAX_PREDS];
+		long count = 0;
+		if(findNodesWithoutWcet(dags[ind], &wcetUnspecifiedForNodes[0], &count)) {
+			int j;
+			printf("[%s] ERROR (2). WCET unspecified for nodes: ", __func__);
+			for(j=0; j<count; j++)
+				printf("'%ld' ", wcetUnspecifiedForNodes[j]);
+			printf(" in DAG %d ('%s'). Exiting..\n", dags[ind]->tdg_id, dags[ind]->name);
+			return 0;
+		}
+		
 		/// function [R, sched, tsk] = runRTA_FP_static_???(tsk, ind)
 		_log("Scheduling DAG %s (tdg_id %d)\n", dags[ind]->name, dags[ind]->tdg_id);
 		
@@ -961,6 +701,7 @@ int staticSchedulabilityAnalysisAndMapping(struct dag_t **dags, int dagsLength, 
 						// Thread and R are ok, confirm and pass to another core
 						dags[ind]->v[k].thread = dags[ind]->v[k].tryThread;
 						dags[ind]->v[k].R = dags[ind]->v[k].tryR;
+						dags[ind]->R = dags[ind]->v[k].R;
 						// printf("[staticSchedulabilityAnalysis] Mapping node idMercurium %ld of DAG tdg_id %d on thread %d\n",
 									 // dags[ind]->v[k].idMercurium, dags[ind]->tdg_id, dags[ind]->v[k].thread);						
 						
@@ -1040,6 +781,17 @@ int staticSchedulabilityAnalysis(struct dag_t **dags, int dagsLength, unsigned i
 	
 	for(ind=0; ind<dagsLength; ind++) {
 		
+		long wcetUnspecifiedForNodes[MAX_PREDS];
+		long count = 0;
+		if(findNodesWithoutWcet(dags[ind], &wcetUnspecifiedForNodes[0], &count)) {
+			int j;
+			printf("[%s] ERROR (3). WCET unspecified for nodes: ", __func__);
+			for(j=0; j<count; j++)
+				printf("'%ld' ", wcetUnspecifiedForNodes[j]);
+			printf(" in DAG %d ('%s'). Exiting..\n", dags[ind]->tdg_id, dags[ind]->name);
+			return 0;
+		}
+		
 		sched = 1;
 		for(k=0; k<dags[ind]->num_nodes; k++) {
 			thread_t currentThread = dags[ind]->v[k].thread;
@@ -1065,6 +817,7 @@ int staticSchedulabilityAnalysis(struct dag_t **dags, int dagsLength, unsigned i
 			}
 			else {
 				dags[ind]->v[k].R = R;
+				dags[ind]->R = R;
 				_log("dag %s, node %ld can be scheduled on core %d with R %lld\n", dags[ind]->name, dags[ind]->v[k].idMercurium, dags[ind]->v[k].thread, dags[ind]->v[k].R);
 			}
 			
@@ -1097,8 +850,9 @@ void staticGetMapping(struct dag_t * dag, thread_t * mappings) {
 	int k;
 	
 	for(k=0; k<dag->num_nodes; k++) {
-// 		printf("Writing mapping of node %ld of dag %s to thread %d at index %ld\n", dag->v[k].idMercurium, dag->name, dag->v[k].thread, dag->v[k].dealerIdx);
-		mappings[dag->v[k].dealerIdx] = dag->v[k].thread;
+		//printf("Writing mapping of node %ld of dag %s to thread %d at index %ld\n", dag->v[k].idMercurium, dag->name, dag->v[k].thread, dag->v[k].dealerIdx);
+		if(dag->v[k].dealerIdx >= 0)
+			mappings[dag->v[k].dealerIdx] = dag->v[k].thread;
 	}
 } // staticGetMapping
 
@@ -1110,7 +864,9 @@ void rrGetMapping(struct dag_t * dag, thread_t * mappings, unsigned int ncores) 
 	for(k=0; k<dag->num_nodes; k++) {
 // 		_log("Writing mapping of node %ld of dag %s to thread %d at index %ld\n",
 // 				 dag->v[k].idMercurium, dag->name, dag->v[k].thread, dag->v[k].dealerIdx);
-		mappings[dag->v[k].dealerIdx] = rrPrev;
-		rrPrev = (rrPrev + 1 ) % ncores;
+		if(dag->v[k].dealerIdx >= 0) {
+			mappings[dag->v[k].dealerIdx] = rrPrev;
+			rrPrev = (rrPrev + 1 ) % ncores;
+		}
 	}
 } // rrGetMapping

@@ -1,7 +1,7 @@
 # Mercurium C/C++/Fortran source-to-source compiler
 
 Mercurium is a C/C++/Fortran source-to-source compilation infrastructure aimed at fast
-prototyping developed by the [Programming Models group](https://pm.bsc.es/)
+prototyping developed by the [*Programming Models group*](https://pm.bsc.es/)
 at the [**Barcelona Supercomputing Center**](http://www.bsc.es/).
 
 Mercurium is mainly used together with the [Nanos++ Runtime Library](https://github.com/bsc-pm/nanox)
@@ -22,13 +22,22 @@ the compiler).
 ## Installation
 
 1. Make sure you fulfill the [build requirements](doc/md_pages/build_requirements.md)
+2. Download Mercurium's code
+    1. From our repo
+        * Clone Mercurium's repository
 
-2. Go to [OmpSs downloads](https://pm.bsc.es/ompss-downloads) and grab the
-latest version of the compiler. Unpack the file and enter in the directory
+                $ git clone https://github.com/bsc-pm/mcxx.git
+        * Run `autoreconf` in the newly created `mcxx` directory
 
-        $ tar xfj mcxx-<<version>>.tar.bz2
-        $ cd mcxx-<<version>>
+                $ cd mcxx
+                $ autoreconf -fiv
+                <<<autoreconf output>>>
+    2. From a distributed tarball
+        * Go to [OmpSs downloads](https://pm.bsc.es/ompss-downloads) and grab the
+          latest version of the compiler. Unpack the file and enter in the directory
 
+                $ tar xvzf mcxx-<<version>>.tar.gz
+                $ cd mcxx-<<version>>
 3. Run `configure`. Check the [configure flags](doc/md_pages/configure_flags.md) to
     enable more or less features in the compiler. By default the compiler does
     not have anything enabled. Set the environment variable `MERCURIUM` to the
@@ -36,27 +45,32 @@ latest version of the compiler. Unpack the file and enter in the directory
 
         $ export MERCURIUM=/path/to/install/mercurium
         $ ./configure --prefix=$MERCURIUM <<configure-flags>>
-
 4. Build and install
 
         $ make
         <<<compilation output>>>
         $ make install
-
 5. Add the installed binaries to your `PATH`
 
         $ export PATH=$MERCURIUM:$PATH
 
-
 And that's all!
 
+## Mercurium profiles
 
-6. The _plain_ compiler (which actually does nothing) is called `plaincc` for
-C and `plaincxx` for C++. Some other [profiles](https://pm.bsc.es/ompss-docs/user-guide/compile-programs.html) may
-be installed depending on the [configure flags](https://pm.bsc.es/ompss-docs/user-guide/installation.html#mercurium-configure-flags)
+Depending on the [configure flags](doc/md_pages/configure_flags.md) used to configure
+Mercurium, you may have some Mercurium profiles or others. A Mercurium profile
+is basically a binary with a predefined configuration that specifies the
+behavior of Mercurium. For example, a profile specifies which phases of
+Mercurium have to be executed or which backend compiler will be used.
 
-Building from the version in our public git repository requires [some more steps](https://pm.bsc.es/ompss-docs/user-guide/installation-git.html#mercurium-from-git)
+Any installation of Mercurium has, at least, the `plain` profiles (`plaincc`,
+`plaincxx` and `plainfc` for C, C++ and Fortran languages respectively). These
+profiles do not transform any OpenMP/OmpSs pragma, they basically process your
+code and generate it again. They may seem useless, but they are really useful
+when debugging our compiler frontend.
 
+For more information check our list of [Mercurium's profiles](https://pm.bsc.es/ompss-docs/user-guide/compile-programs.html).
 
 ## Contact Information
 

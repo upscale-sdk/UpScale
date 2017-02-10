@@ -1,0 +1,5 @@
+digraph G0 {
+// RENAME AS G0-extra.dot and add in the same folder as executable
+	1 -> 4
+	4 -> 3
+}

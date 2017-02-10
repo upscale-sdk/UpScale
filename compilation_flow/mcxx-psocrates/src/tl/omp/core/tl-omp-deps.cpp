@@ -310,14 +310,14 @@ namespace TL { namespace OpenMP {
                         {
                             error_printf_at(it->get_locus(),
                                     "cannot override '%s' directionality of symbol '%s'\n",
-                                    get_dependency_direction_name(existing_dep_dir).c_str(),
+                                    dependency_direction_to_str(existing_dep_dir).c_str(),
                                     expr.get_base_symbol().get_name().c_str());
                         }
                         else
                         {
                             warn_printf_at(it->get_locus(),
                                     "redundant '%s' directionality clause for symbol '%s'\n",
-                                    get_dependency_direction_name(existing_dep_dir).c_str(),
+                                    dependency_direction_to_str(existing_dep_dir).c_str(),
                                     expr.get_base_symbol().get_name().c_str()
                                     );
                         }
@@ -329,9 +329,9 @@ namespace TL { namespace OpenMP {
                     {
                         error_printf_at(it->get_locus(),
                                 "cannot override '%s' directionality of symbol '%s' with directionality '%s'\n",
-                                get_dependency_direction_name(existing_dep_dir).c_str(),
+                                dependency_direction_to_str(existing_dep_dir).c_str(),
                                 expr.get_base_symbol().get_name().c_str(),
-                                get_dependency_direction_name(dep_dir).c_str());
+                                dependency_direction_to_str(dep_dir).c_str());
                     }
                 }
             }
@@ -482,7 +482,7 @@ namespace TL { namespace OpenMP {
         TL::ObjectList<Nodecl::NodeclBase> reduction_expressions =
             reductions.map<Nodecl::NodeclBase>(&ReductionSymbol::get_reduction_expression);
 
-        get_info_from_dependences<DEP_OMPSS_CONCURRENT>(
+        get_info_from_dependences<DEP_OMPSS_REDUCTION>(
                 reduction_expressions, default_data_attr, this->in_ompss_mode(),
                 "reduction", data_sharing_environment, extra_symbols);
     }
@@ -738,7 +738,7 @@ namespace TL { namespace OpenMP {
         }
     }
 
-    std::string get_dependency_direction_name(DependencyDirection d)
+    std::string dependency_direction_to_str(DependencyDirection d)
     {
         switch (d)
         {
@@ -760,6 +760,8 @@ namespace TL { namespace OpenMP {
                 return "weakout";
             case DEP_OMPSS_WEAK_INOUT:
                 return "weakinout";
+            case DEP_OMPSS_REDUCTION:
+                return "reduction";
             default:
                 return "<<unknown-dependence-kind?>>";
         }

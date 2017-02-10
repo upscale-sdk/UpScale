@@ -45,7 +45,6 @@ namespace TL { namespace OpenMP {
         DEP_DIR_UNDEFINED = 0,
         // Input dependence
         DEP_DIR_IN = BITMAP(1),
-        // Input dependence in a parameter passed by value
         // Output dependence
         DEP_DIR_OUT = BITMAP(2),
         // Inout dependence
@@ -54,18 +53,21 @@ namespace TL { namespace OpenMP {
         // OmpSs
         //   Input dependence with firstprivate storage
         DEP_OMPSS_DIR_IN_PRIVATE = BITMAP(3),
-        //   Concurrent dependences
+        //   Concurrent/Commutative dependences
         DEP_OMPSS_CONCURRENT = BITMAP(4),
         DEP_OMPSS_COMMUTATIVE = BITMAP(5),
         //   Weak
         DEP_OMPSS_WEAK_IN = BITMAP(6),
         DEP_OMPSS_WEAK_OUT = BITMAP(7),
-        DEP_OMPSS_WEAK_INOUT = DEP_OMPSS_WEAK_IN | DEP_OMPSS_WEAK_OUT
+        DEP_OMPSS_WEAK_INOUT = DEP_OMPSS_WEAK_IN | DEP_OMPSS_WEAK_OUT,
+        //   Reduction dependence type
+        DEP_OMPSS_REDUCTION = BITMAP(8)
     };
 
     bool is_strict_dependency(DependencyDirection dir);
     bool is_weak_dependency(DependencyDirection dir);
-    std::string get_dependency_direction_name(DependencyDirection d);
+
+    std::string dependency_direction_to_str(DependencyDirection d);
 
     class LIBTL_CLASS DependencyItem : public TL::Object
     {

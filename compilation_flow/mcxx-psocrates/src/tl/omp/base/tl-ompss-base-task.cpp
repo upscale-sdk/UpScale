@@ -817,7 +817,7 @@ namespace TL { namespace OmpSs {
                     std::fill_n( std::ostream_iterator<const char*>(ss), diff, " ");
 
                 ss
-                    << " " << OpenMP::Base::dependence_direction_to_str(kind) << "\n"
+                    << " " << dependency_direction_to_str(kind) << "\n"
                     ;
 
                 *_omp_report_file
@@ -827,47 +827,47 @@ namespace TL { namespace OmpSs {
 
         void visit(const Nodecl::OpenMP::DepIn& dep_in)
         {
-            report_dep(dep_in.get_in_deps(), OpenMP::DEP_DIR_IN);
+            report_dep(dep_in.get_exprs(), OpenMP::DEP_DIR_IN);
         }
 
         void visit(const Nodecl::OmpSs::DepWeakIn& dep_in)
         {
-            report_dep(dep_in.get_weakin_deps(), OpenMP::DEP_OMPSS_WEAK_IN);
+            report_dep(dep_in.get_exprs(), OpenMP::DEP_OMPSS_WEAK_IN);
         }
 
         void visit(const Nodecl::OpenMP::DepOut& dep_out)
         {
-            report_dep(dep_out.get_out_deps(), OpenMP::DEP_DIR_OUT);
+            report_dep(dep_out.get_exprs(), OpenMP::DEP_DIR_OUT);
         }
 
         void visit(const Nodecl::OmpSs::DepWeakOut& dep_in)
         {
-            report_dep(dep_in.get_weakout_deps(), OpenMP::DEP_OMPSS_WEAK_OUT);
+            report_dep(dep_in.get_exprs(), OpenMP::DEP_OMPSS_WEAK_OUT);
         }
 
         void visit(const Nodecl::OpenMP::DepInout& dep_inout)
         {
-            report_dep(dep_inout.get_inout_deps(), OpenMP::DEP_DIR_INOUT);
+            report_dep(dep_inout.get_exprs(), OpenMP::DEP_DIR_INOUT);
         }
 
         void visit(const Nodecl::OmpSs::DepWeakInout& dep_in)
         {
-            report_dep(dep_in.get_weakinout_deps(), OpenMP::DEP_OMPSS_WEAK_INOUT);
+            report_dep(dep_in.get_exprs(), OpenMP::DEP_OMPSS_WEAK_INOUT);
         }
 
         void visit(const Nodecl::OmpSs::DepInPrivate& dep_in)
         {
-            report_dep(dep_in.get_in_deps(), OpenMP::DEP_OMPSS_DIR_IN_PRIVATE);
+            report_dep(dep_in.get_exprs(), OpenMP::DEP_OMPSS_DIR_IN_PRIVATE);
         }
 
         void visit(const Nodecl::OmpSs::Concurrent& dep_inout)
         {
-            report_dep(dep_inout.get_inout_deps(), OpenMP::DEP_OMPSS_CONCURRENT);
+            report_dep(dep_inout.get_exprs(), OpenMP::DEP_OMPSS_CONCURRENT);
         }
 
         void visit(const Nodecl::OmpSs::Commutative& dep_inout)
         {
-            report_dep(dep_inout.get_commutative_deps(), OpenMP::DEP_OMPSS_COMMUTATIVE);
+            report_dep(dep_inout.get_exprs(), OpenMP::DEP_OMPSS_COMMUTATIVE);
         }
     };
 
@@ -902,7 +902,7 @@ namespace TL { namespace OmpSs {
                     std::fill_n( std::ostream_iterator<const char*>(ss), diff, " ");
 
                 ss
-                    << " " << OpenMP::Base::copy_direction_to_str(kind) << "\n"
+                    << " " << copy_direction_to_str(kind) << "\n"
                     ;
 
                 *_omp_report_file

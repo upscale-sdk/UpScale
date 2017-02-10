@@ -60,15 +60,16 @@ namespace TL { namespace Nanos6 {
             void create_copies_function();
 
             void create_cost_function();
+        public:
+            Nodecl::NodeclBase create_task_flags(TL::Symbol task_flags);
+
+        private:
 
             TL::Symbol add_field_to_class(TL::Symbol new_class_symbol,
                                           TL::Scope class_scope,
                                           const std::string &var_name,
                                           const locus_t *var_locus,
-                                          TL::Type field_type);
-            TL::Symbol add_field_to_class(TL::Symbol class_symbol,
-                                          TL::Scope class_scope,
-                                          TL::Symbol var,
+                                          bool is_allocatable,
                                           TL::Type field_type);
 
             TL::Scope compute_scope_for_environment_structure();
@@ -204,6 +205,16 @@ namespace TL { namespace Nanos6 {
                 TL::Symbol &task_invocation_info,
                 Nodecl::NodeclBase &local_init);
 
+            void compute_captured_values();
+
+            void compute_captured_saved_expressions();
+
+            void compute_captured_symbols_without_data_sharings();
+            void compute_captured_symbols_without_data_sharings(Nodecl::NodeclBase n);
+            void compute_captured_symbols_without_data_sharings(const TL::ObjectList<Nodecl::NodeclBase>& list);
+
+            bool symbol_has_data_sharing_attribute(TL::Symbol sym) const;
+
         public:
             TL::ObjectList<TL::Symbol> shared;
             TL::ObjectList<TL::Symbol> private_;
@@ -238,11 +249,15 @@ namespace TL { namespace Nanos6 {
             // For inline related_function is the enclosing task,
             // for function tasks, it is the function task itself
             TL::Symbol related_function;
+
+            // This bool states whether the current task has any dependence
+            bool any_task_dependence;
             const locus_t* locus_of_task_creation;
             const locus_t* locus_of_task_declaration;
 
             TaskProperties(LoweringPhase* lowering_phase)
-                : phase(lowering_phase), is_tied(true), is_function_task(false) { }
+                : phase(lowering_phase), is_tied(true),
+                  is_function_task(false), any_task_dependence(false) { }
 
             static TaskProperties gather_task_properties(
                     LoweringPhase* phase,
@@ -267,7 +282,8 @@ namespace TL { namespace Nanos6 {
                     /* out */
                     Nodecl::NodeclBase& capture_env);
 
-            void compute_captured_values();
+
+
             void remove_data_sharing_of_this();
             void fix_data_sharing_of_this();
 

@@ -1,8 +1,8 @@
 Upscale SDK - Operating System
 ==============================
 
-The current version of the P-SOCRATES SDK does not allow to build an
-application when Linux is running on the I/O cores.
+The current SDK support to applications when the Linux OS is running on
+the I/O cores is still experimental.
 
 To build [ERIKA Enterprise](http://erika.tuxfamily.org/) for the clusters,
 overwrite the contents of the directories `libgomp/` and `libpsocoffload/` with

@@ -123,21 +123,21 @@ namespace Codegen
     void Psocrates::visit(const Nodecl::OpenMP::DepIn& n)
     {
         *file << "depend(in: ";
-        walk_list(n.get_in_deps().as<Nodecl::List>(), ", ");
+        walk_list(n.get_exprs().as<Nodecl::List>(), ", ");
         *file << ")";
     }
 
     void Psocrates::visit(const Nodecl::OpenMP::DepInout& n)
     {
         *file << "depend(inout: ";
-        walk_list(n.get_inout_deps().as<Nodecl::List>(), ", ");
+        walk_list(n.get_exprs().as<Nodecl::List>(), ", ");
         *file << ")";
     }
 
     void Psocrates::visit(const Nodecl::OpenMP::DepOut& n)
     {
         *file << "depend(out: ";
-        walk_list(n.get_out_deps().as<Nodecl::List>(), ", ");
+        walk_list(n.get_exprs().as<Nodecl::List>(), ", ");
         *file << ")";
     }
 

@@ -39,6 +39,8 @@
 #include "fortran03-mangling.h"
 #include "fortran03-typeutils.h"
 #include "fortran03-typeenviron.h"
+#include "fortran03-intrinsics.h"
+#include "fortran03-scope.h"
 
 #include <algorithm>
 #include <set>
@@ -127,55 +129,54 @@ namespace TL { namespace Nanos6 {
         virtual void visit(const Nodecl::OmpSs::Concurrent &n)
         {
             not_supported_seq("concurrent dependences",
-                              n.get_inout_deps().as<Nodecl::List>());
+                              n.get_exprs().as<Nodecl::List>());
         }
 
-        virtual void visit(const Nodecl::OmpSs::Commutative &n)
+        template < typename T >
+        void handle_dependences(const T& n, TL::ObjectList<Nodecl::NodeclBase>& dep_list)
         {
-            _task_properties.dep_commutative.append(
-                n.get_commutative_deps().as<Nodecl::List>().to_object_list());
+            _task_properties.any_task_dependence = true;
+            dep_list.append(n.get_exprs().template as<Nodecl::List>().to_object_list());
         }
 
         virtual void visit(const Nodecl::OpenMP::DepIn &n)
         {
-            _task_properties.dep_in.append(
-                n.get_in_deps().as<Nodecl::List>().to_object_list());
+            handle_dependences(n, _task_properties.dep_in);
         }
 
         virtual void visit(const Nodecl::OpenMP::DepOut &n)
         {
-            _task_properties.dep_out.append(
-                n.get_out_deps().as<Nodecl::List>().to_object_list());
+            handle_dependences(n, _task_properties.dep_out);
         }
 
         virtual void visit(const Nodecl::OpenMP::DepInout &n)
         {
-            _task_properties.dep_inout.append(
-                n.get_inout_deps().as<Nodecl::List>().to_object_list());
+            handle_dependences(n, _task_properties.dep_inout);
         }
 
         virtual void visit(const Nodecl::OmpSs::DepWeakIn &n)
         {
-            _task_properties.dep_weakin.append(
-                n.get_weakin_deps().as<Nodecl::List>().to_object_list());
+            handle_dependences(n, _task_properties.dep_weakin);
         }
 
         virtual void visit(const Nodecl::OmpSs::DepWeakOut &n)
         {
-            _task_properties.dep_weakout.append(
-                n.get_weakout_deps().as<Nodecl::List>().to_object_list());
+            handle_dependences(n, _task_properties.dep_weakout);
         }
 
         virtual void visit(const Nodecl::OmpSs::DepWeakInout &n)
         {
-            _task_properties.dep_weakinout.append(
-                n.get_weakinout_deps().as<Nodecl::List>().to_object_list());
+            handle_dependences(n, _task_properties.dep_weakinout);
+        }
+
+        virtual void visit(const Nodecl::OmpSs::Commutative &n)
+        {
+            handle_dependences(n, _task_properties.dep_commutative);
         }
 
         virtual void visit(const Nodecl::OpenMP::Final &n)
         {
-            not_supported("final clause", n.get_condition());
-            // _task_properties.final_ = n.get_condition();
+            _task_properties.final_ = n.get_condition();
         }
 
         virtual void visit(const Nodecl::OpenMP::Untied &n)
@@ -265,7 +266,7 @@ namespace TL { namespace Nanos6 {
         virtual void visit(const Nodecl::OmpSs::DepInPrivate &n)
         {
             not_supported_seq("(private) value input dependences",
-                              n.get_in_deps().as<Nodecl::List>());
+                              n.get_exprs().as<Nodecl::List>());
         }
 
         virtual void visit(const Nodecl::OmpSs::Cost &n)
@@ -366,7 +367,7 @@ namespace TL { namespace Nanos6 {
         }
     }
 
-    void TaskProperties::compute_captured_values()
+    void TaskProperties::compute_captured_saved_expressions()
     {
         for (TL::ObjectList<TL::Symbol>::iterator it = shared.begin();
                 it != shared.end();
@@ -383,8 +384,87 @@ namespace TL { namespace Nanos6 {
             if (it->get_type().depends_on_nonconstant_values())
                 walk_type_for_saved_expressions(it->get_type());
         }
+    }
 
+    bool TaskProperties::symbol_has_data_sharing_attribute(TL::Symbol sym) const
+    {
+        return shared.contains(sym)       ||
+               private_.contains(sym)     ||
+               firstprivate.contains(sym) ||
+               captured_value.contains(sym);
+    }
+
+    void TaskProperties::compute_captured_symbols_without_data_sharings(
+            Nodecl::NodeclBase n)
+    {
+        struct CaptureExtraVariables : public Nodecl::ExhaustiveVisitor<void>
+        {
+            TaskProperties& _tp;
+            TL::ObjectList<TL::Symbol> _ignore_symbols;
+
+            CaptureExtraVariables(TaskProperties& tp) : _tp(tp) { }
+
+            void visit(const Nodecl::MultiExpression& node)
+            {
+                // The iterator of a MultiExpression has to be ignored!
+                _ignore_symbols.append(node.get_symbol());
+                this->Nodecl::ExhaustiveVisitor<void>::visit(node);
+            }
+
+            void visit(const Nodecl::Symbol& node)
+            {
+                TL::Symbol sym = node.get_symbol();
+                if (!sym.is_variable())
+                    return;
+
+                if (sym.is_member())
+                    return;
+
+                if (_ignore_symbols.contains(sym))
+                    return;
+
+                if(!_tp.symbol_has_data_sharing_attribute(sym))
+                    _tp.captured_value.insert(sym);
+            }
+        };
+
+        CaptureExtraVariables visitor(*this);
+        visitor.walk(n);
+    }
+
+    void TaskProperties::compute_captured_symbols_without_data_sharings(
+            const TL::ObjectList<Nodecl::NodeclBase>& list)
+    {
+        for (TL::ObjectList<Nodecl::NodeclBase>::const_iterator it =  list.begin();
+                it != list.end();
+                ++it)
+        {
+            compute_captured_symbols_without_data_sharings(*it);
+        }
+    }
+
+    void TaskProperties::compute_captured_symbols_without_data_sharings()
+    {
+        // Dependences
+        compute_captured_symbols_without_data_sharings(dep_in);
+        compute_captured_symbols_without_data_sharings(dep_out);
+        compute_captured_symbols_without_data_sharings(dep_inout);
+        compute_captured_symbols_without_data_sharings(dep_weakin);
+        compute_captured_symbols_without_data_sharings(dep_weakout);
+        compute_captured_symbols_without_data_sharings(dep_weakinout);
+        compute_captured_symbols_without_data_sharings(dep_commutative);
+
+        // Other task clauses
+        compute_captured_symbols_without_data_sharings(final_);
+        compute_captured_symbols_without_data_sharings(cost);
+    }
+
+    void TaskProperties::compute_captured_values()
+    {
+        compute_captured_saved_expressions();
         captured_value.insert(firstprivate);
+        compute_captured_symbols_without_data_sharings();
+
     }
 
     namespace {
@@ -805,11 +885,141 @@ namespace TL { namespace Nanos6 {
         task_invocation_info.set_value(task_invocation_init);
     }
 
+    Nodecl::NodeclBase create_final_task_flags(TL::Symbol task_flags, Nodecl::NodeclBase condition)
+    {
+        Nodecl::NodeclBase ret;
+
+        if (condition.is_null())
+        {
+            if (IS_FORTRAN_LANGUAGE)
+                condition = Nodecl::BooleanLiteral::make(get_bool_type(), const_value_get_zero(type_get_size(get_bool_type()), /* sign */ 1));
+            else
+                condition = const_value_to_nodecl(const_value_get_signed_int(0));
+
+        }
+
+        if (IS_C_LANGUAGE || IS_CXX_LANGUAGE)
+        {
+            // In this case we only need an expression
+            ret = Nodecl::BitwiseShl::make(
+                    /* lhs */
+                    Nodecl::Different::make(
+                        condition,
+                        const_value_to_nodecl(const_value_get_signed_int(0)),
+                        TL::Type::get_bool_type()),
+                    /* rhs */
+                    const_value_to_nodecl(const_value_get_signed_int(0)),
+                    /* type */
+                    get_size_t_type());
+        }
+        else // IS_FORTRAN_LANGUAGE
+        {
+            TL::Scope sc = TL::Scope::get_global_scope();
+
+            Nodecl::NodeclBase arg1 = Nodecl::FortranActualArgument::make(task_flags.make_nodecl());
+            Nodecl::NodeclBase arg2 = Nodecl::FortranActualArgument::make(const_value_to_nodecl(const_value_get_signed_int(0)));
+            Nodecl::NodeclBase arguments_list = Nodecl::List::make(arg1, arg2);
+
+            nodecl_t actual_arguments[2] = { arg1.get_internal_nodecl(), arg2.get_internal_nodecl() };
+
+            TL::Symbol intrinsic_ibset(
+                    fortran_solve_generic_intrinsic_call(
+                        fortran_query_intrinsic_name_str(sc.get_decl_context(), "ibset"),
+                        actual_arguments,
+                        /* explicit_num_actual_arguments */ 2,
+                        /* is_call */ 0));
+
+            Nodecl::FunctionCall ibset_function_call =
+                Nodecl::FunctionCall::make(
+                    intrinsic_ibset.make_nodecl(),
+                    arguments_list,
+                    /* alternate_name */ Nodecl::NodeclBase::null(),
+                    /* function_form */ Nodecl::NodeclBase::null(),
+                    intrinsic_ibset.get_type().returns(),
+                    task_flags.get_locus());
+
+            Nodecl::NodeclBase actual_arguments_ibclr =
+                Nodecl::List::make(arg1.shallow_copy(), arg2.shallow_copy());
+
+            TL::Symbol intrinsic_ibclr(
+                    fortran_solve_generic_intrinsic_call(
+                        fortran_query_intrinsic_name_str(sc.get_decl_context(), "ibclr"),
+                        actual_arguments,
+                        /* explicit_num_actual_arguments */ 2,
+                        /* is_call */ 0));
+
+            Nodecl::FunctionCall ibclr_function_call = Nodecl::FunctionCall::make(
+                    intrinsic_ibclr.make_nodecl(),
+                    arguments_list.shallow_copy(),
+                    /* alternate_name */ Nodecl::NodeclBase::null(),
+                    /* function_form */ Nodecl::NodeclBase::null(),
+                    intrinsic_ibclr.get_type().returns(),
+                    task_flags.get_locus());
+
+            ret = Nodecl::IfElseStatement::make(
+                /* condition */
+                condition,
+                /* then */
+                Nodecl::List::make(
+                    Nodecl::ExpressionStatement::make(
+                        Nodecl::Assignment::make(
+                               /* lhs */ task_flags.make_nodecl(),
+                               /* rhs */ ibset_function_call,
+                               /* type */ task_flags.get_type().get_lvalue_reference_to()
+                        ),
+                        task_flags.get_locus()
+                    )
+                ),
+                /* else */
+                Nodecl::List::make(
+                    Nodecl::ExpressionStatement::make(
+                        Nodecl::Assignment::make(
+                               /* lhs */ task_flags.make_nodecl(),
+                               /* rhs */ ibclr_function_call,
+                               /* type */ task_flags.get_type().get_lvalue_reference_to()
+                        ),
+                        /* locus */
+                        task_flags.get_locus()
+                    )
+                )
+            );
+        }
+        return ret;
+    }
+
+    Nodecl::NodeclBase TaskProperties::create_task_flags(TL::Symbol task_flags)
+    {
+        Nodecl::NodeclBase ret;
+        Nodecl::NodeclBase final_nodecl;
+        // Nodecl::NodeclBase if_nodecl;
+
+        // Final flag
+        final_nodecl = create_final_task_flags(task_flags, this->final_);
+        ret = final_nodecl;
+
+        // Nodecl::NodeclBase if_flag = create_if_task_flags(task_flags);
+
+        // if (IS_C_LANGUAGE || IS_CXX_LANGUAGE)
+        // {
+        //     ret = Nodecl::LogicalOr::make(final_flag, if_flag);
+        // }
+        // else // if (IS_FORTRAN_LANGUAGE)
+        // {
+        //     // Just a set of IfElseStatement that need to be generated one
+        //     // after the other
+        //     ret = Nodecl::List();
+        //     ret.append(final_flag);
+        //     ret.append(if_flag);
+        // }
+
+        return ret;
+    }
+
     void TaskProperties::create_task_info(
             /* out */
             TL::Symbol &task_info,
-            TL::Symbol& task_invocation_info,
-            Nodecl::NodeclBase& local_init)
+            TL::Symbol &task_invocation_info,
+            Nodecl::NodeclBase &local_init)
     {
         create_outline_function();
         create_dependences_function();
@@ -889,6 +1099,21 @@ namespace TL { namespace Nanos6 {
                 init_run,
                 run_type);
         init_run.set_text("C");
+
+        Nodecl::NodeclBase init_run_final;
+
+        if (IS_FORTRAN_LANGUAGE)
+        {
+            init_run_final = outline_function_mangled.make_nodecl(/* set_ref_type */ true);
+        }
+        else
+        {
+            init_run_final = outline_function.make_nodecl(/* set_ref_type */ true);
+        }
+        init_run_final = Nodecl::Conversion::make(
+                init_run_final,
+                run_type);
+        init_run_final.set_text("C");
 
         Nodecl::NodeclBase field_register_depinfo = get_field("register_depinfo");
         Nodecl::NodeclBase init_register_depinfo;
@@ -1102,6 +1327,7 @@ namespace TL { namespace Nanos6 {
                                                   TL::Scope class_scope,
                                                   const std::string &var_name,
                                                   const locus_t *var_locus,
+                                                  bool is_allocatable,
                                                   TL::Type field_type)
     {
         TL::Type new_class_type = new_class_symbol.get_user_defined_type();
@@ -1124,26 +1350,16 @@ namespace TL { namespace Nanos6 {
         symbol_entity_specs_set_class_type(field.get_internal_symbol(),
                 new_class_type.get_internal_type());
         symbol_entity_specs_set_access(field.get_internal_symbol(), AS_PUBLIC);
+
+        symbol_entity_specs_set_is_allocatable(
+                field.get_internal_symbol(), is_allocatable);
+
         class_type_add_member(
                 new_class_type.get_internal_type(),
                 field.get_internal_symbol(),
                 field.get_internal_symbol()->decl_context,
                 /* is_definition */ 1);
 
-        return field;
-    }
-
-    TL::Symbol TaskProperties::add_field_to_class(TL::Symbol new_class_symbol,
-                                                  TL::Scope class_scope,
-                                                  TL::Symbol var,
-                                                  TL::Type field_type)
-    {
-        TL::Symbol field = add_field_to_class(new_class_symbol,
-                                              class_scope,
-                                              var.get_name(),
-                                              var.get_locus(),
-                                              field_type);
-        field_map[var] = field;
         return field;
     }
 
@@ -1321,11 +1537,15 @@ namespace TL { namespace Nanos6 {
 
             }
 
-            add_field_to_class(
+            TL::Symbol field = add_field_to_class(
                     new_class_symbol,
                     class_scope,
-                    *it,
+                    it->get_name(),
+                    it->get_locus(),
+                    symbol_entity_specs_get_is_allocatable(it->get_internal_symbol()),
                     type_of_field);
+
+            field_map[*it] = field;
         }
 
         for (TL::ObjectList<TL::Symbol>::iterator it = shared.begin();
@@ -1345,8 +1565,10 @@ namespace TL { namespace Nanos6 {
                         class_scope,
                         get_name_for_descriptor(it->get_name()),
                         it->get_locus(),
+                        /* is_allocatable */ false,
                         fortran_storage_type_array_descriptor(
                             it->get_type().no_ref()));
+
                     array_descriptor_map[*it] = field;
                 }
             }
@@ -1368,11 +1590,15 @@ namespace TL { namespace Nanos6 {
                 }
             }
 
-            add_field_to_class(
+            TL::Symbol field = add_field_to_class(
                     new_class_symbol,
                     class_scope,
-                    *it,
+                    it->get_name(),
+                    it->get_locus(),
+                    /* is_allocatable */ false,
                     type_of_field);
+
+            field_map[*it] = field;
         }
 
         nodecl_t nodecl_output = nodecl_null();
@@ -1809,6 +2035,7 @@ namespace TL { namespace Nanos6 {
         Nodecl::NodeclBase body = Nodecl::Utils::deep_copy(task_body, unpacked_inside_scope, symbol_map);
         unpacked_empty_stmt.prepend_sibling(body);
 
+
         unpacked_empty_stmt.append_sibling(nested_functions);
 
         if (IS_CXX_LANGUAGE
@@ -2073,6 +2300,7 @@ namespace TL { namespace Nanos6 {
                         unpacked_function.make_nodecl(/* set_ref_type */ true),
                         unpacked_function.get_type().get_pointer_to()));
 
+            Nodecl::List deallocate_exprs;
             for (TL::ObjectList<TL::Symbol>::iterator it = captured_value.begin();
                     it != captured_value.end();
                     it++)
@@ -2083,14 +2311,19 @@ namespace TL { namespace Nanos6 {
                 forwarded_parameter_names.append(field.get_name());
                 forwarded_parameter_types.append(field.get_type().get_lvalue_reference_to());
 
-                args.append(
-                            Nodecl::ClassMemberAccess::make(
-                                // Nodecl::Dereference::make(
-                                arg.make_nodecl(/* set_ref_type */ true),
-                                //    arg.get_type().points_to().get_lvalue_reference_to()),
-                                field_map[*it].make_nodecl(),
-                                /* member_literal */ Nodecl::NodeclBase::null(),
-                                field_map[*it].get_type().get_lvalue_reference_to()));
+                Nodecl::NodeclBase class_member_access =  Nodecl::ClassMemberAccess::make(
+                        arg.make_nodecl(/* set_ref_type */ true),
+                        field_map[*it].make_nodecl(),
+                        /* member_literal */ Nodecl::NodeclBase::null(),
+                        field_map[*it].get_type().get_lvalue_reference_to());
+                args.append(class_member_access);
+
+                // Finally, if the current symbol is allocatable, we have to deallocate it.
+                // Note that this copy was created when we captured its value.
+                if (symbol_entity_specs_get_is_allocatable(it->get_internal_symbol()))
+                {
+                    deallocate_exprs.append(class_member_access.shallow_copy());
+                }
             }
 
             for (TL::ObjectList<TL::Symbol>::iterator it = shared.begin();
@@ -2132,6 +2365,9 @@ namespace TL { namespace Nanos6 {
                             get_void_type()));
 
             outline_empty_stmt.prepend_sibling(call_to_forward);
+
+            if(!deallocate_exprs.is_null())
+                outline_empty_stmt.append_sibling(Nodecl::FortranDeallocateStatement::make(deallocate_exprs, nodecl_null()));
 
             TL::ObjectList<std::string> c_forwarded_parameter_names(forwarded_parameter_names.size(), "");
 
@@ -2368,9 +2604,6 @@ namespace TL { namespace Nanos6 {
                                        base_reg);
 
             body_of_loop.replace(base_reg);
-
-            ERROR_CONDITION(base_reg.size() != 1, "Invalid list", 0);
-            src << as_statement(base_reg[0]);
 
             register_statements.append(loop);
         }
@@ -2958,6 +3191,8 @@ namespace TL { namespace Nanos6 {
             { dep_weakin, "nanos_register_weak_read_depinfo" },
             { dep_weakout, "nanos_register_weak_write_depinfo" },
             { dep_weakinout, "nanos_register_weak_readwrite_depinfo" },
+
+            { dep_commutative, "nanos_register_commutative_depinfo" },
         };
 
         for (DependencesSet *dep_set = deps;
@@ -3257,6 +3492,10 @@ namespace TL { namespace Nanos6 {
 
     void TaskProperties::create_dependences_function()
     {
+        // Skip this function if the current task doesn't have any task dependence
+        if (!any_task_dependence)
+            return;
+
         if (IS_C_LANGUAGE || IS_CXX_LANGUAGE)
         {
             create_dependences_function_c();
@@ -3890,7 +4129,6 @@ namespace TL { namespace Nanos6 {
 
         captured_env = captured_list;
     }
-
 
     void TaskProperties::fortran_add_types(TL::Scope dest_scope)
     {

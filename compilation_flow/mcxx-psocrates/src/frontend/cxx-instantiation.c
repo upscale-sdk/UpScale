@@ -391,17 +391,37 @@ static void instantiate_member(type_t* selected_template UNUSED_PARAMETER,
             }
         case SK_TYPEDEF:
             {
+                // Typedefs are treated a bit different: instead of duplicating
+                // the symbol first and updating the type afterwards, we do it
+                // the other way around.  The reason to reorder these two
+                // statements is that when we're updating the type we do not
+                // want to find the duplicated symbol:
+                //
+                //      template < typename T >
+                //      struct my_iterator {
+                //           typedef int value_type;
+                //      };
+                //
+                //      template <typename V>
+                //      class iterator_base : public my_iterator<V> {
+                //           public:
+                //               typedef typename iterator_base::value_type value_type;
+                //      };
+                //
+                type_t* updated_type = update_type_for_instantiation(
+                        member_of_template->type_information,
+                        context_of_being_instantiated,
+                        member_of_template->locus,
+                        instantiation_symbol_map,
+                        /* pack_index */ -1);
+
                 scope_entry_t* new_member = add_duplicate_member_to_class(context_of_being_instantiated,
                         being_instantiated,
                         instantiation_symbol_map,
                         member_of_template);
 
-                new_member->type_information = update_type_for_instantiation(
-                        new_member->type_information,
-                        context_of_being_instantiated,
-                        member_of_template->locus,
-                        instantiation_symbol_map,
-                        /* pack_index */ -1);
+                new_member->type_information = updated_type;
+
                 if (is_error_type(new_member->type_information))
                     return;
 
@@ -2104,11 +2124,18 @@ char function_may_be_instantiated(scope_entry_t* entry)
 {
     if (symbol_entity_specs_get_is_member(entry))
     {
+        if (is_template_specialized_type(entry->type_information)
+                && entry->decl_context->template_parameters->is_explicit_specialization)
+        {
+            return 0;
+        }
+
         return member_function_may_be_instantiated(entry);
     }
-    else if (is_template_specialized_type(entry->type_information))
+    else if (is_template_specialized_type(entry->type_information)
+            && !entry->decl_context->template_parameters->is_explicit_specialization)
     {
-        return nonmember_template_function_may_be_instantiated(entry);
+            return nonmember_template_function_may_be_instantiated(entry);
     }
     return 0;
 }

@@ -17371,6 +17371,9 @@ static const_value_t* compute_subconstant_of_class_member_access(
 
 static const_value_t* compute_glvalue_of_symbol(scope_entry_t* entry);
 
+// It's only used to detect circular dependences
+static scope_entry_list_t* called_arrow_operators = NULL;
+
 static void check_nodecl_member_access(
         nodecl_t nodecl_accessed, 
         nodecl_t nodecl_member,
@@ -17481,9 +17484,8 @@ static void check_nodecl_member_access(
 
     if (operator_arrow)
     {
-        // In this case we have to lookup for an arrow operator
-        // and then update the accessed type. We will rely on
-        // overload mechanism to do it
+        // In this case we have to lookup for an arrow operator and then update
+        // the accessed type. We will rely on overload mechanism to do it
         static AST arrow_operator_tree = NULL;
         if (arrow_operator_tree == NULL)
         {
@@ -17512,9 +17514,9 @@ static void check_nodecl_member_access(
             return;
         }
 
-        type_t* argument_types[1] = { 
+        type_t* argument_types[1] = {
             /* Note that we want the real original type since it might be a referenced type */
-            nodecl_get_type(nodecl_accessed) 
+            nodecl_get_type(nodecl_accessed)
         };
 
         candidate_t* candidate_set = NULL;
@@ -17538,10 +17540,10 @@ static void check_nodecl_member_access(
 
         if (selected_operator_arrow == NULL)
         {
-            error_message_overload_failed(candidate_set, 
+            error_message_overload_failed(candidate_set,
                     "operator->",
                     decl_context,
-                    /* num_arguments */ 0, 
+                    /* num_arguments */ 0,
                     /* no explicit arguments */ NULL,
                     /* implicit_argument */ argument_types[0],
                     nodecl_get_locus(nodecl_accessed));
@@ -17554,7 +17556,7 @@ static void check_nodecl_member_access(
         }
         candidate_set_free(&candidate_set);
 
-        if (function_has_been_deleted(decl_context, selected_operator_arrow, 
+        if (function_has_been_deleted(decl_context, selected_operator_arrow,
                     nodecl_get_locus(nodecl_accessed)))
         {
             *nodecl_output = nodecl_make_err_expr(locus);
@@ -17563,8 +17565,80 @@ static void check_nodecl_member_access(
             return;
         }
 
-        type_t* return_type =
-            function_type_get_return_type(selected_operator_arrow->type_information);
+        // Checking that these implicit arrow operators do not define a circular dependence
+        char found = 0;
+        for (it = entry_list_iterator_begin(called_arrow_operators);
+                !entry_list_iterator_end(it) && !found;
+                entry_list_iterator_next(it))
+        {
+            scope_entry_t* arrow_op = entry_list_iterator_current(it);
+            found = arrow_op == selected_operator_arrow;
+        }
+        entry_list_iterator_free(it);
+
+        if (found)
+        {
+            error_printf_at(nodecl_get_locus(nodecl_accessed),
+                    "detected circular dependence between arrow operators\n");
+
+            entry_list_free(called_arrow_operators);
+            called_arrow_operators = NULL;
+
+            *nodecl_output = nodecl_make_err_expr(locus);
+            nodecl_free(nodecl_accessed);
+            nodecl_free(nodecl_member);
+            return;
+        }
+
+        called_arrow_operators = entry_list_add(called_arrow_operators, selected_operator_arrow);
+
+        type_t* return_type = function_type_get_return_type(selected_operator_arrow->type_information);
+
+        if (is_class_type(no_ref(return_type)))
+        {
+            // A call to the arrow operator may imply more than one call to different
+            // arrow operators (only when the return type of these arrow operators have class types):
+            //
+            //  struct Data {
+            //      void foo() {}
+            //  };
+            //
+            //  struct A {
+            //      Data d;
+            //      Data* operator->() { return &d; }
+            //  };
+            //
+            //  struct B {
+            //      A _a;
+            //      A& operator->() { return _a; }
+            //  };
+            //
+            //  int main() {
+            //      B b;
+            //      b->foo();
+            //  }
+            //
+            nodecl_accessed =
+                cxx_nodecl_make_function_call(
+                        nodecl_make_symbol(selected_operator_arrow, nodecl_get_locus(nodecl_accessed)),
+                        /* arguments */ nodecl_null(),
+                        nodecl_make_list_1(nodecl_accessed),
+                        // Ideally this should be binary infix but this call does not fit in any cathegory
+                        /* function form */ nodecl_null(),
+                        return_type,
+                        decl_context,
+                        nodecl_get_locus(nodecl_accessed));
+
+            check_nodecl_member_access(nodecl_accessed, nodecl_member,
+                    decl_context, /* is arrow */ 1, /* has_template_tag */ 0, locus, nodecl_output);
+            return;
+        }
+
+        entry_list_free(called_arrow_operators);
+        called_arrow_operators = NULL;
+
+
+        /* At this point we guarantee that 'return_type' type is a pointer to class type */
 
         if (!is_pointer_to_class_type(no_ref(return_type)))
         {
@@ -17589,10 +17663,10 @@ static void check_nodecl_member_access(
             nodecl_make_dereference(
                     cxx_nodecl_make_function_call(
                         nodecl_make_symbol(selected_operator_arrow, nodecl_get_locus(nodecl_accessed)),
-                        /* called name */ nodecl_null(),
+                        /* arguments */ nodecl_null(),
                         nodecl_make_list_1(nodecl_accessed),
                         // Ideally this should be binary infix but this call does not fit in any cathegory
-                        /* function form */ nodecl_null(), 
+                        /* function form */ nodecl_null(),
                         return_type,
                         decl_context,
                         nodecl_get_locus(nodecl_accessed)),
@@ -20884,26 +20958,9 @@ static void check_nodecl_parenthesized_initializer(nodecl_t direct_initializer,
             arguments[i] = nodecl_get_type(nodecl_expr);
         }
 
-        enum initialization_kind initialization_kind = IK_INVALID;
-        if (num_items == 1)
-        {
-            if (is_class_type(no_ref(arguments[0]))
-                    && class_type_is_derived_instantiating(
-                        get_unqualified_type(no_ref(arguments[0])),
-                        declared_type,
-                        locus))
-            {
-                initialization_kind = IK_DIRECT_INITIALIZATION | IK_BY_CONSTRUCTOR;
-            }
-            else
-            {
-                initialization_kind = IK_DIRECT_INITIALIZATION | IK_BY_USER_DEFINED_CONVERSION;
-            }
-        }
-        else
-        {
-            initialization_kind = IK_DIRECT_INITIALIZATION | IK_BY_CONSTRUCTOR;
-        }
+        // For overloading we only have to consider all the constructors (see 13.3.1.3)
+        enum initialization_kind initialization_kind =
+            IK_DIRECT_INITIALIZATION | IK_BY_CONSTRUCTOR;
 
         scope_entry_list_t* candidates = NULL;
         scope_entry_t* chosen_constructor = NULL;

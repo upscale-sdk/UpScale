@@ -1,0 +1,11 @@
+digraph G0 {
+	0 [label="tdg_id=0", style=invis]
+	0 [label="maxI=0", style=invis]
+	0 [label="maxT=14", style=invis]
+	3 [MIET="2907.17", MEET="3210.65", MAET="3118.63"]
+	2 [MIET="2358.21", MEET="2573.91", MAET="2402.34"]
+	4 [MIET="812.84", MEET="1097.86", MAET="894.21"]
+	1 [MIET="3390.82", MEET="3631.09", MAET="3625.93"]
+	1 -> 2
+	2 -> 3
+}
