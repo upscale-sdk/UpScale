@@ -2,7 +2,7 @@ Upscale SDK - Operating System
 ==============================
 
 This section explains how to build and run [ERIKA
-Enterprise](http://erika.tuxfamily.org/) on the computing clusters when the I/O
+Enterprise](http://www.erika-enterprise.com/) on the computing clusters when the I/O
 cores execute the [RTEMS operating system](https://www.rtems.org/).
 
 The structure of the directories is as follows:
