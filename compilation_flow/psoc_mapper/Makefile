@@ -1,6 +1,6 @@
 #CFLAGS=-m32
 CFLAGS += -O0 -g3 -Wall
-# CFLAGS += -DDEBUG
+#CFLAGS += -DDEBUG
 LDFLAGS += -lm
 # CSRCS=dealer.c sched.c
 LIB_CSRCS=sched.c dag.c

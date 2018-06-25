@@ -49,6 +49,7 @@ void printNode(const struct node_t *node) {
 	printf("Node idMercurium %ld ", node->idMercurium);
 // 	printf("address 0x%x ", _mycast_ node);
 	printf("C %lld accWorkload %lld ", node->C, node->accWorkload);
+	printf("R %lld ", node->R);
 // 	printf("preds 0x%x succs 0x%x", _mycast_ node->preds, _mycast_ node->succs);
 // 	printf("\n");
 	
@@ -338,6 +339,7 @@ int dagCreate(char *graphName, int tdg_id, long* nodes, wcet_t *wcets, thread_t 
 				int ret =	initNode(n);
 				if(ret != 0)
 					return ret;
+				n->C = 1;
 				n->idMercurium = ++maxIdMercurium;
 				indexes2[n->idMercurium] = 0;
 			}
@@ -348,6 +350,7 @@ int dagCreate(char *graphName, int tdg_id, long* nodes, wcet_t *wcets, thread_t 
 				int ret =	initNode(n);
 				if(ret != 0)
 					return ret;
+				n->C = 1;
 				n->idMercurium = ++maxIdMercurium;
 				indexes2[n->idMercurium] = nnodes - 1;
 			}		

@@ -435,7 +435,7 @@ wcet_t staticComputeSelfInterference(struct dag_t** dags, long ind, long k, stru
 } // staticComputeSelfInterference
 
 int staticTryAllocationBestFit(struct dag_t **dags, int dagsLength, long ind, long k, thread_t currentThread, float Rmax, float *R) {
-
+  
 	_log("*** dag %s node %ld currentThread %d Rmax %f\n", dags[ind]->name, dags[ind]->v[k].idMercurium, currentThread, Rmax);
 	
 	int res = 1, i, p;
@@ -464,7 +464,7 @@ int staticTryAllocationBestFit(struct dag_t **dags, int dagsLength, long ind, lo
 			
 			// for each higher priority task
 			for(i=0; i<ind; i++) {
-				for (p=0; p<dags[ind]->num_nodes; p++) {
+				for (p=0; p<dags[i]->num_nodes; p++) {
 					struct node_t * v = &dags[i]->v[p];
 					if(v->thread == currentThread) {
 						Rstatic = Rstatic + ceil((Rprev + v->R - v->C) / dags[i]->T) * v->C;
@@ -501,7 +501,7 @@ int staticTryAllocationBestFit(struct dag_t **dags, int dagsLength, long ind, lo
 	
  	_log("dag %s %s schedulable! Rstatic %f Rmax %f deadline %ld\n", dags[ind]->name, res ? "would be" : "would not be", Rstatic, Rmax, dags[ind]->D);
 	
-	return res;
+  	return res;
 } // staticTryAllocationBestFit
 
 void staticGetInReachablesAllThr(struct dag_t** dags, long ind, struct node_t *v, struct node_t ** inR, long *numInR) {
