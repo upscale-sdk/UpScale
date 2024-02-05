@@ -8,7 +8,7 @@ UpScale tackles this challenge by including technologies from different computin
  
 UpScale is released by the P-SOCRATES project, addressing the challenges of predictability and performance of current and future applications with high-performance and real-time requirements. The consortium is led by Instituto Superior de Engenharia do Porto, Portugal, and also comprises: Barcelona Supercomputing Centre, Spain, University of Modena and Regio Emilia, Italy, Swiss Federal Institute of Technology Zurich, Switzerland, Evidence SRL, Italy, Active Technologies SRL, Italy and ATOS, Spain.
 
-More information at http://www.upscale-sdk.com. 
+More information at https://p-socrates.github.io/. 
  
  
 Structure
